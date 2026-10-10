@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLabData } from '../context/LabDataContext';
 import { getWhatsAppUrl } from '../utils/whatsapp';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeDigitsOnly, isValidFullName, isValidPhoneNumber } from '../utils/validation';
+import { uploadPrescriptionCloud } from '../config/firebase';
 
 export const BookingPage: React.FC = () => {
   const { cart, removeFromCart, clearCart, totalPrice, generateWhatsAppVoucher } = useBooking();
@@ -27,7 +28,7 @@ export const BookingPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
 
-  const handleWhatsAppBooking = (e: React.FormEvent) => {
+  const handleWhatsAppBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -44,8 +45,16 @@ export const BookingPage: React.FC = () => {
       return;
     }
 
-    // Register booking in admin lab data
+    const tempBookingId = 'AC-BK-' + Math.floor(100000 + Math.random() * 900000);
+    let rxCloudUrl = '';
+
+    if (prescriptionFile) {
+      rxCloudUrl = await uploadPrescriptionCloud(prescriptionFile, tempBookingId);
+    }
+
+    // Register booking in admin lab data & Firebase Firestore
     addBooking({
+      id: tempBookingId,
       patientName: patientInfo.patientName,
       phoneNumber: patientInfo.phoneNumber,
       age: patientInfo.age + ' Yrs',
@@ -53,6 +62,7 @@ export const BookingPage: React.FC = () => {
       collectionType: patientInfo.collectionType,
       address: patientInfo.address,
       timeSlot: patientInfo.preferredTimeSlot,
+      prescriptionUrl: rxCloudUrl,
       tests: cart.length > 0
         ? cart.map((i) => ({ code: i.code, name: i.name, price: i.price }))
         : [{ code: 'RX-REQ', name: prescriptionFile ? `Prescription File: ${prescriptionFile.name}` : 'Direct Booking / Inquiry', price: totalPrice }],

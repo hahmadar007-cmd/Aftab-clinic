@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { TEST_CATALOG, HEALTH_PACKAGES } from '../data/labData';
 import type { LabTest, HealthPackage } from '../data/labData';
+import {
+  listenToCollection,
+  saveFirestoreDoc,
+  updateFirestoreDoc,
+  deleteFirestoreDoc,
+} from '../config/firebase';
 
 export interface BookingRecord {
   id: string;
@@ -12,6 +18,7 @@ export interface BookingRecord {
   address?: string;
   date: string;
   timeSlot?: string;
+  prescriptionUrl?: string;
   tests: { code: string; name: string; price: number }[];
   totalAmount: number;
   discountPercent?: number;
@@ -141,6 +148,36 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Listen for real-time Firestore cloud database changes
+  useEffect(() => {
+    const unsubBookings = listenToCollection<BookingRecord>('bookings', (cloudBookings) => {
+      if (cloudBookings && cloudBookings.length > 0) {
+        setBookings(cloudBookings);
+        localStorage.setItem('aftab_clinic_custom_bookings', JSON.stringify(cloudBookings));
+      }
+    });
+
+    const unsubReports = listenToCollection<LabReportRecord>('reports', (cloudReports) => {
+      if (cloudReports && cloudReports.length > 0) {
+        setReports(cloudReports);
+        localStorage.setItem('aftab_clinic_custom_reports', JSON.stringify(cloudReports));
+      }
+    });
+
+    const unsubTests = listenToCollection<LabTest>('tests', (cloudTests) => {
+      if (cloudTests && cloudTests.length > 0) {
+        setTests(cloudTests);
+        localStorage.setItem('aftab_clinic_custom_tests', JSON.stringify(cloudTests));
+      }
+    });
+
+    return () => {
+      unsubBookings();
+      unsubReports();
+      unsubTests();
+    };
+  }, []);
+
   const saveTests = (newTests: LabTest[]) => {
     setTests(newTests);
     localStorage.setItem('aftab_clinic_custom_tests', JSON.stringify(newTests));
@@ -157,26 +194,31 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addTest = (newTest: Omit<LabTest, 'id'>) => {
+    const testId = 'custom-test-' + Date.now();
     const testWithId: LabTest = {
       ...newTest,
-      id: 'custom-test-' + Date.now(),
+      id: testId,
     };
     saveTests([testWithId, ...tests]);
+    saveFirestoreDoc('tests', testId, testWithId);
   };
 
   const updateTest = (id: string, updatedFields: Partial<LabTest>) => {
     const updated = tests.map((t) => (t.id === id ? { ...t, ...updatedFields } : t));
     saveTests(updated);
+    updateFirestoreDoc('tests', id, updatedFields);
   };
 
   const deleteTest = (id: string) => {
     const filtered = tests.filter((t) => t.id !== id);
     saveTests(filtered);
+    deleteFirestoreDoc('tests', id);
   };
 
   const addBooking = (data: Omit<BookingRecord, 'id' | 'date' | 'status' | 'paymentStatus'> & { id?: string }) => {
+    const bookingId = data.id || 'AC-BK-' + Math.floor(100000 + Math.random() * 900000);
     const newBooking: BookingRecord = {
-      id: data.id || 'AC-BK-' + Math.floor(100000 + Math.random() * 900000),
+      id: bookingId,
       date: new Date().toISOString().split('T')[0],
       status: 'Pending',
       paymentStatus: 'Unpaid',
@@ -184,6 +226,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     const updated = [newBooking, ...bookings];
     saveBookings(updated);
+    saveFirestoreDoc('bookings', bookingId, newBooking);
     return newBooking;
   };
 
@@ -203,6 +246,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return b;
     });
     saveBookings(updated);
+    updateFirestoreDoc('bookings', id, { status, ...(paymentStatus ? { paymentStatus } : {}) });
   };
 
   const updateBookingDiscount = (id: string, discountPercent: number) => {
@@ -220,19 +264,26 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return b;
     });
     saveBookings(updated);
+    const target = updated.find((b) => b.id === id);
+    if (target) {
+      updateFirestoreDoc('bookings', id, { discountPercent: target.discountPercent, discountAmount: target.discountAmount });
+    }
   };
 
   const deleteBooking = (id: string) => {
     const filtered = bookings.filter((b) => b.id !== id);
     saveBookings(filtered);
+    deleteFirestoreDoc('bookings', id);
   };
 
   const addReport = (report: Omit<LabReportRecord, 'reportId'>) => {
+    const repId = 'AC-REP-' + Math.floor(100000 + Math.random() * 900000);
     const newReport: LabReportRecord = {
       ...report,
-      reportId: 'AC-REP-' + Math.floor(100000 + Math.random() * 900000),
+      reportId: repId,
     };
     saveReports([newReport, ...reports]);
+    saveFirestoreDoc('reports', repId, newReport);
     // Automatically set corresponding booking status to Completed
     if (report.bookingId) {
       updateBookingStatus(report.bookingId, 'Completed');
