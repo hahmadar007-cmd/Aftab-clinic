@@ -658,11 +658,12 @@ export const AdminDashboard: React.FC = () => {
 
                 <div className="card" style={{ padding: '0.5rem' }}>
                   <div className="table-responsive">
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '850px' }}>
                       <thead>
                         <tr style={{ borderBottom: '2px solid var(--border-light)', backgroundColor: 'var(--bg-slate)' }}>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Ref ID</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Patient Details</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Patient Details & Age</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Date & Slot</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Tests Booked</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Total (PKR)</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Status</th>
@@ -676,12 +677,21 @@ export const AdminDashboard: React.FC = () => {
                               {booking.id}
                             </td>
                             <td style={{ padding: '0.75rem' }}>
-                              <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{booking.patientName}</div>
+                              <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{booking.patientName}</div>
+                              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-blue)', marginTop: '0.15rem' }}>
+                                Age: {booking.age ? `${booking.age} Yrs` : 'N/A'} ({booking.gender || 'Patient'})
+                              </div>
                               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {booking.phoneNumber} • {booking.gender}, {booking.age}
+                                📞 {booking.phoneNumber}
                               </div>
                             </td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', maxWidth: '240px' }}>
+                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem' }}>
+                              <div style={{ fontWeight: 600 }}>{booking.date}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--primary-blue)', fontWeight: 600, backgroundColor: 'var(--primary-blue-light)', padding: '0.15rem 0.4rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.25rem' }}>
+                                ⏰ {booking.timeSlot || 'Morning (08:00 AM - 12:00 PM)'}
+                              </div>
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', maxWidth: '220px' }}>
                               {booking.tests.map((t) => t.name).join(', ')}
                             </td>
                             <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-green)' }}>

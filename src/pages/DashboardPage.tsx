@@ -148,16 +148,25 @@ export const DashboardPage: React.FC = () => {
                       >
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.75rem' }}>
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--primary-blue)' }}>
                                 {booking.patientName}
                               </span>
                               <span style={{ fontSize: '0.75rem', fontWeight: 700, backgroundColor: 'var(--primary-blue-light)', color: 'var(--primary-blue)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
                                 Ref ID: {booking.id}
                               </span>
+                              {booking.age && (
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, backgroundColor: '#f1f5f9', color: 'var(--text-body)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                                  Age: {booking.age} Yrs ({booking.gender || 'Patient'})
+                                </span>
+                              )}
                             </div>
-                            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                              {booking.date} • {booking.collectionType} ({booking.timeSlot || 'Morning'})
+                            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                              <span>📅 Date: <strong>{booking.date}</strong></span>
+                              <span>•</span>
+                              <span>🏥 {booking.collectionType}</span>
+                              <span>•</span>
+                              <span style={{ color: 'var(--primary-blue)', fontWeight: 600 }}>⏰ Slot: {booking.timeSlot || 'Morning (08:00 AM - 12:00 PM)'}</span>
                             </div>
                           </div>
 

@@ -202,7 +202,7 @@ export const BookingPage: React.FC = () => {
                   </div>
 
                   {/* Phone & Age */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-responsive-grid">
                     <div className="form-group">
                       <label className="form-label">WhatsApp Mobile Number</label>
                       <div className="input-wrapper">
@@ -219,12 +219,12 @@ export const BookingPage: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Age (Yrs)</label>
+                      <label className="form-label">Age (Years)</label>
                       <input
                         type="text"
                         className="form-input"
                         style={{ paddingLeft: '0.75rem' }}
-                        placeholder="30"
+                        placeholder="Age in Years (e.g. 30)"
                         value={patientInfo.age}
                         onChange={(e) => setPatientInfo({ ...patientInfo, age: sanitizeDigitsOnly(e.target.value) })}
                         required
@@ -233,7 +233,7 @@ export const BookingPage: React.FC = () => {
                   </div>
 
                   {/* Gender & Collection Type */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-responsive-grid">
                     <div className="form-group">
                       <label className="form-label">Gender</label>
                       <select
@@ -281,7 +281,7 @@ export const BookingPage: React.FC = () => {
                   )}
 
                   {/* Date & Time Slot */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-responsive-grid">
                     <div className="form-group">
                       <label className="form-label">Preferred Date</label>
                       <input
@@ -294,16 +294,16 @@ export const BookingPage: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Time Slot</label>
+                      <label className="form-label">Preferred Time Slot</label>
                       <select
                         className="form-input"
-                        style={{ paddingLeft: '0.75rem' }}
+                        style={{ paddingLeft: '0.75rem', width: '100%' }}
                         value={patientInfo.preferredTimeSlot}
                         onChange={(e) => setPatientInfo({ ...patientInfo, preferredTimeSlot: e.target.value })}
                       >
-                        <option>Morning (08:00 AM - 12:00 PM)</option>
-                        <option>Afternoon (12:00 PM - 04:00 PM)</option>
-                        <option>Evening (04:00 PM - 08:00 PM)</option>
+                        <option value="Morning (08:00 AM - 12:00 PM)">Morning (08:00 AM - 12:00 PM)</option>
+                        <option value="Afternoon (12:00 PM - 04:00 PM)">Afternoon (12:00 PM - 04:00 PM)</option>
+                        <option value="Evening (04:00 PM - 08:00 PM)">Evening (04:00 PM - 08:00 PM)</option>
                       </select>
                     </div>
                   </div>

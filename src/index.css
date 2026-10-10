@@ -297,7 +297,6 @@ h1, h2, h3, h4, h5, h6 {
   animation: pulseGlow 2s infinite ease-in-out;
 }
 
-/* Mobile Responsiveness Media Queries */
 @media (max-width: 768px) {
   .main-content {
     padding-bottom: 1.5rem;
@@ -310,6 +309,10 @@ h1, h2, h3, h4, h5, h6 {
 
   .hide-on-mobile {
     display: none !important;
+  }
+
+  .show-on-mobile {
+    display: block !important;
   }
 
   .grid-span-2-mobile {
@@ -326,6 +329,16 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
   }
+
+  .form-responsive-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.form-responsive-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
 }
 
 @media (max-width: 480px) {
