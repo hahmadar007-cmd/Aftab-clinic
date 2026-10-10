@@ -31,13 +31,23 @@ export const LoginPage: React.FC = () => {
 
     const success = login(email, password);
     if (success) {
-      navigate('/dashboard', { replace: true });
+      if (email.toLowerCase().trim() === 'aftabclinictestzone@gmail.com') {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     }
   };
 
   const fillDemoUser = () => {
     setEmail('patient@aftabclinic.com');
     setPassword('demoPass123');
+    setErrorMessage('');
+  };
+
+  const fillAdminUser = () => {
+    setEmail('aftabclinictestzone@gmail.com');
+    setPassword('tayyab__666');
     setErrorMessage('');
   };
 
@@ -147,35 +157,55 @@ export const LoginPage: React.FC = () => {
           <div
             style={{
               marginTop: '1.5rem',
-              padding: '0.75rem 1rem',
+              padding: '0.875rem 1rem',
               backgroundColor: 'var(--primary-blue-light)',
               borderRadius: 'var(--radius-md)',
               fontSize: '0.8125rem',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              flexDirection: 'column',
+              gap: '0.625rem',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)', fontWeight: 600 }}>
               <CheckCircle2 size={16} />
-              <span>Quick Login? Use quick fill.</span>
+              <span>Quick One-Click Logins:</span>
             </div>
-            <button
-              type="button"
-              onClick={fillDemoUser}
-              style={{
-                background: 'var(--primary-blue)',
-                color: '#fff',
-                border: 'none',
-                padding: '0.25rem 0.625rem',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
-            >
-              Quick Fill
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+              <button
+                type="button"
+                onClick={fillDemoUser}
+                style={{
+                  flex: 1,
+                  background: '#ffffff',
+                  color: 'var(--primary-blue)',
+                  border: '1px solid var(--primary-blue)',
+                  padding: '0.375rem 0.625rem',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                👤 Patient Fill
+              </button>
+              <button
+                type="button"
+                onClick={fillAdminUser}
+                style={{
+                  flex: 1,
+                  background: 'var(--primary-blue)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.375rem 0.625rem',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                👑 Admin Fill
+              </button>
+            </div>
           </div>
 
           {/* Registration Link */}

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, ShoppingBag } from 'lucide-react';
+import { Menu, ShoppingBag, ShieldCheck } from 'lucide-react';
 import { useBooking } from '../context/BookingContext';
+import { useAuth } from '../context/AuthContext';
 import { WhatsAppButton } from './WhatsAppButton';
 
 interface AppBarProps {
@@ -10,6 +11,7 @@ interface AppBarProps {
 
 export const AppBar: React.FC<AppBarProps> = ({ onMenuClick }) => {
   const { cart } = useBooking();
+  const { isAdmin } = useAuth();
 
   return (
     <header
@@ -93,7 +95,31 @@ export const AppBar: React.FC<AppBarProps> = ({ onMenuClick }) => {
         </div>
 
         {/* Right: Cart Icon & WhatsApp Icon */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          {isAdmin && (
+            <Link
+              to="/admin"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                backgroundColor: 'var(--primary-blue-light)',
+                color: 'var(--primary-blue)',
+                border: '1px solid var(--primary-blue)',
+                padding: '0.3rem 0.625rem',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+              title="Admin Control Panel"
+            >
+              <ShieldCheck size={16} />
+              <span>Admin Panel</span>
+            </Link>
+          )}
+
           {/* Cart Icon & Badge */}
           <Link
             to="/book"

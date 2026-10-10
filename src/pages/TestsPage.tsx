@@ -2,18 +2,19 @@ import React, { useState, useMemo } from 'react';
 import { Search, Plus, Filter, TestTube, Clock, Check } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useBooking } from '../context/BookingContext';
-import { TEST_CATALOG } from '../data/labData';
+import { useLabData } from '../context/LabDataContext';
 import type { LabTest } from '../data/labData';
 
 export const TestsPage: React.FC = () => {
   const { addToCart, isInCart } = useBooking();
+  const { tests } = useLabData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const categories = ['All', 'Hematology', 'Biochemistry', 'Hormones', 'Microbiology', 'PCR & Virology'];
 
   const filteredTests = useMemo(() => {
-    return TEST_CATALOG.filter((test) => {
+    return tests.filter((test) => {
       const matchesSearch =
         test.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         test.code.includes(searchTerm) ||
@@ -23,7 +24,7 @@ export const TestsPage: React.FC = () => {
 
       return matchesSearch && matchesCategory;
     });
-  }, [searchTerm, selectedCategory]);
+  }, [tests, searchTerm, selectedCategory]);
 
   return (
     <div className="app-container">

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { BookingProvider } from './context/BookingContext';
+import { LabDataProvider } from './context/LabDataContext';
 import { SplashPage } from './pages/SplashPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -18,8 +19,9 @@ import { AdminRoute } from './components/AdminRoute';
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BookingProvider>
-        <BrowserRouter>
+      <LabDataProvider>
+        <BookingProvider>
+          <BrowserRouter>
           <Routes>
             {/* 1. Splash Screen */}
             <Route path="/" element={<SplashPage />} />
@@ -99,7 +101,8 @@ export const App: React.FC = () => {
           </Routes>
         </BrowserRouter>
       </BookingProvider>
-    </AuthProvider>
+    </LabDataProvider>
+  </AuthProvider>
   );
 };
 

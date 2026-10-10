@@ -4,10 +4,12 @@ import { Layout } from '../components/Layout';
 import { useBooking } from '../context/BookingContext';
 import type { PatientInfo } from '../context/BookingContext';
 import { useAuth } from '../context/AuthContext';
+import { useLabData } from '../context/LabDataContext';
 
 export const BookingPage: React.FC = () => {
   const { cart, removeFromCart, clearCart, totalPrice, generateWhatsAppVoucher } = useBooking();
   const { whatsAppConfig, user } = useAuth();
+  const { addBooking } = useLabData();
 
   const [patientInfo, setPatientInfo] = useState<PatientInfo>({
     patientName: user?.fullName || '',
@@ -44,10 +46,24 @@ export const BookingPage: React.FC = () => {
       return;
     }
 
+    // Register booking in admin lab data
+    addBooking({
+      patientName: patientInfo.patientName,
+      phoneNumber: patientInfo.phoneNumber,
+      age: patientInfo.age + ' Yrs',
+      gender: patientInfo.gender,
+      collectionType: patientInfo.collectionType,
+      address: patientInfo.address,
+      timeSlot: patientInfo.preferredTimeSlot,
+      tests: cart.map((i) => ({ code: i.code, name: i.name, price: i.price })),
+      totalAmount: totalPrice,
+    });
+
     const voucherMessage = generateWhatsAppVoucher(patientInfo);
     const waUrl = `https://wa.me/${whatsAppConfig.phoneNumber}?text=${encodeURIComponent(voucherMessage)}`;
 
     window.open(waUrl, '_blank');
+    clearCart();
   };
 
   return (
