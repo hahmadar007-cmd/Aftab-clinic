@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Check, Clock, TestTube, Filter } from 'lucide-react';
+import { Search, Plus, Filter, TestTube, Clock, Check } from 'lucide-react';
+import { Layout } from '../components/Layout';
+import { useBooking } from '../context/BookingContext';
 import { TEST_CATALOG } from '../data/labData';
 import type { LabTest } from '../data/labData';
-import { useBooking } from '../context/BookingContext';
-import { AppBar } from '../components/AppBar';
 
 export const TestsPage: React.FC = () => {
   const { addToCart, isInCart } = useBooking();
@@ -27,7 +27,7 @@ export const TestsPage: React.FC = () => {
 
   return (
     <div className="app-container">
-      <AppBar />
+      <Layout>
 
       <main className="main-content">
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '1.5rem' }}>
@@ -205,6 +205,7 @@ export const TestsPage: React.FC = () => {
           </div>
         </div>
       </main>
+      </Layout>
     </div>
   );
 };

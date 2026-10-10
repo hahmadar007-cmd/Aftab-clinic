@@ -10,7 +10,10 @@ import { TestsPage } from './pages/TestsPage';
 import { PackagesPage } from './pages/PackagesPage';
 import { BookingPage } from './pages/BookingPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { HistoryPage } from './pages/HistoryPage';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminRoute } from './components/AdminRoute';
 
 export const App: React.FC = () => {
   return (
@@ -70,6 +73,24 @@ export const App: React.FC = () => {
                 <ProtectedRoute>
                   <ReportsPage />
                 </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <HistoryPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
               }
             />
 

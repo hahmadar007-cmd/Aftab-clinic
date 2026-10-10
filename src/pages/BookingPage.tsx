@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Trash2, ShoppingBag, MessageCircle, User as UserIcon, Phone, MapPin } from 'lucide-react';
+import { Trash2, ShoppingBag, MessageCircle, User as UserIcon, Phone, MapPin, Upload, X } from 'lucide-react';
+import { Layout } from '../components/Layout';
 import { useBooking } from '../context/BookingContext';
 import type { PatientInfo } from '../context/BookingContext';
 import { useAuth } from '../context/AuthContext';
-import { AppBar } from '../components/AppBar';
 
 export const BookingPage: React.FC = () => {
   const { cart, removeFromCart, clearCart, totalPrice, generateWhatsAppVoucher } = useBooking();
@@ -21,6 +21,7 @@ export const BookingPage: React.FC = () => {
   });
 
   const [errorMsg, setErrorMsg] = useState('');
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
 
   const handleWhatsAppBooking = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +52,7 @@ export const BookingPage: React.FC = () => {
 
   return (
     <div className="app-container">
-      <AppBar />
+      <Layout>
 
       <main className="main-content">
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '1.5rem' }}>
@@ -281,6 +282,82 @@ export const BookingPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Prescription Upload */}
+                  <div className="form-group">
+                    <label className="form-label">Doctor's Prescription (Optional)</label>
+                    <div
+                      style={{
+                        border: '2px dashed var(--border-light)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '1.5rem',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        backgroundColor: 'var(--bg-slate)',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onClick={() => document.getElementById('prescription-upload')?.click()}
+                    >
+                      {prescriptionFile ? (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <Upload size={24} color="var(--primary-green)" />
+                            <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-dark)' }}>
+                              {prescriptionFile.name}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                            {(prescriptionFile.size / 1024).toFixed(2)} KB
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPrescriptionFile(null);
+                            }}
+                            style={{
+                              marginTop: '0.5rem',
+                              background: 'var(--error-red)',
+                              color: '#fff',
+                              border: 'none',
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <X size={12} /> Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <Upload size={32} color="var(--primary-blue)" style={{ marginBottom: '0.5rem' }} />
+                          <p style={{ fontSize: '0.875rem', color: 'var(--text-body)', marginBottom: '0.25rem' }}>
+                            Click to upload prescription
+                          </p>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            PNG, JPG, PDF up to 5MB
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      id="prescription-upload"
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.pdf"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            setErrorMsg('File size must be less than 5MB');
+                            return;
+                          }
+                          setPrescriptionFile(file);
+                        }
+                      }}
+                    />
+                  </div>
+
                   <button
                     type="submit"
                     className="btn btn-whatsapp"
@@ -302,6 +379,7 @@ export const BookingPage: React.FC = () => {
           </div>
         </div>
       </main>
+      </Layout>
     </div>
   );
 };

@@ -1,16 +1,16 @@
 import React from 'react';
-import { CheckCircle2, Plus, Check, Sparkles, Clock, TestTube } from 'lucide-react';
+import { CheckCircle, Clock, Sparkles, TestTube, Check, Plus } from 'lucide-react';
+import { Layout } from '../components/Layout';
+import { useBooking } from '../context/BookingContext';
 import { HEALTH_PACKAGES } from '../data/labData';
 import type { HealthPackage } from '../data/labData';
-import { useBooking } from '../context/BookingContext';
-import { AppBar } from '../components/AppBar';
 
 export const PackagesPage: React.FC = () => {
   const { addToCart, isInCart } = useBooking();
 
   return (
     <div className="app-container">
-      <AppBar />
+      <Layout>
 
       <main className="main-content">
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '1.5rem' }}>
@@ -143,7 +143,7 @@ export const PackagesPage: React.FC = () => {
                     <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
                       {pkg.testsIncluded.map((testName, i) => (
                         <li key={i} style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: 'var(--text-body)' }}>
-                          <CheckCircle2 size={16} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                          <CheckCircle size={16} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
                           <span>{testName}</span>
                         </li>
                       ))}
@@ -188,6 +188,7 @@ export const PackagesPage: React.FC = () => {
           </div>
         </div>
       </main>
+      </Layout>
     </div>
   );
 };

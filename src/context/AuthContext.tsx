@@ -9,6 +9,9 @@ interface AuthContextType extends AuthState {
   updateWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
 }
 
+const ADMIN_EMAIL = 'aftabclinictestzone@gmail.com';
+const ADMIN_PASSWORD = 'tayyab__666';
+
 const DEFAULT_WHATSAPP: WhatsAppConfig = {
   phoneNumber: '923001234567',
   displayPhone: '+92 300 1234567',
@@ -20,10 +23,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>(() => {
     const savedUser = localStorage.getItem('aftab_clinic_user');
+    const user = savedUser ? JSON.parse(savedUser) : null;
     return {
-      user: savedUser ? JSON.parse(savedUser) : null,
+      user,
       isAuthenticated: !!savedUser,
       isLoading: false,
+      isAdmin: user?.isAdmin || false,
     };
   });
 
@@ -32,17 +37,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return savedWA ? JSON.parse(savedWA) : DEFAULT_WHATSAPP;
   });
 
-  const login = (email: string): boolean => {
+  const login = (email: string, password: string): boolean => {
+    // Check if admin credentials
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      const adminUser: User = {
+        id: 'admin_' + Date.now(),
+        fullName: 'Admin',
+        email: email,
+        isAdmin: true,
+      };
+      localStorage.setItem('aftab_clinic_user', JSON.stringify(adminUser));
+      setAuthState({
+        user: adminUser,
+        isAuthenticated: true,
+        isLoading: false,
+        isAdmin: true,
+      });
+      return true;
+    }
+
+    // Regular patient login
+    if (password.length < 4) {
+      return false;
+    }
+
     const mockUser: User = {
       id: 'usr_' + Date.now(),
       fullName: email.split('@')[0].toUpperCase(),
       email: email,
+      isAdmin: false,
     };
     localStorage.setItem('aftab_clinic_user', JSON.stringify(mockUser));
     setAuthState({
       user: mockUser,
       isAuthenticated: true,
       isLoading: false,
+      isAdmin: false,
     });
     return true;
   };
@@ -52,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: 'usr_' + Date.now(),
       fullName,
       email,
+      isAdmin: false,
     };
     localStorage.setItem('aftab_registered_' + email, JSON.stringify(newUser));
     return true;
@@ -63,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      isAdmin: false,
     });
   };
 
