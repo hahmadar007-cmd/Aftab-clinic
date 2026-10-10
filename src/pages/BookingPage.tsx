@@ -6,6 +6,7 @@ import type { PatientInfo } from '../context/BookingContext';
 import { useAuth } from '../context/AuthContext';
 import { useLabData } from '../context/LabDataContext';
 import { getWhatsAppUrl } from '../utils/whatsapp';
+import { sanitizeNameInput, sanitizePhoneInput, sanitizeDigitsOnly, isValidFullName, isValidPhoneNumber } from '../utils/validation';
 
 export const BookingPage: React.FC = () => {
   const { cart, removeFromCart, clearCart, totalPrice, generateWhatsAppVoucher } = useBooking();
@@ -30,12 +31,12 @@ export const BookingPage: React.FC = () => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!patientInfo.patientName.trim()) {
-      setErrorMsg('Please enter the patient full name.');
+    if (!isValidFullName(patientInfo.patientName)) {
+      setErrorMsg('Please enter a valid Patient Name (letters only, at least 2 characters).');
       return;
     }
-    if (!patientInfo.phoneNumber.trim()) {
-      setErrorMsg('Please enter a valid contact mobile number.');
+    if (!isValidPhoneNumber(patientInfo.phoneNumber)) {
+      setErrorMsg('Please enter a valid WhatsApp Mobile Number (digits only, 10 to 13 numbers).');
       return;
     }
     if (patientInfo.collectionType === 'Home Collection' && !patientInfo.address.trim()) {
@@ -184,7 +185,7 @@ export const BookingPage: React.FC = () => {
                         className="form-input"
                         placeholder="e.g. Muhammad Ahmad"
                         value={patientInfo.patientName}
-                        onChange={(e) => setPatientInfo({ ...patientInfo, patientName: e.target.value })}
+                        onChange={(e) => setPatientInfo({ ...patientInfo, patientName: sanitizeNameInput(e.target.value) })}
                         required
                       />
                     </div>
@@ -201,7 +202,7 @@ export const BookingPage: React.FC = () => {
                           className="form-input"
                           placeholder="0300 1234567"
                           value={patientInfo.phoneNumber}
-                          onChange={(e) => setPatientInfo({ ...patientInfo, phoneNumber: e.target.value })}
+                          onChange={(e) => setPatientInfo({ ...patientInfo, phoneNumber: sanitizePhoneInput(e.target.value) })}
                           required
                         />
                       </div>
@@ -210,12 +211,12 @@ export const BookingPage: React.FC = () => {
                     <div className="form-group">
                       <label className="form-label">Age (Yrs)</label>
                       <input
-                        type="number"
+                        type="text"
                         className="form-input"
                         style={{ paddingLeft: '0.75rem' }}
                         placeholder="30"
                         value={patientInfo.age}
-                        onChange={(e) => setPatientInfo({ ...patientInfo, age: e.target.value })}
+                        onChange={(e) => setPatientInfo({ ...patientInfo, age: sanitizeDigitsOnly(e.target.value) })}
                         required
                       />
                     </div>

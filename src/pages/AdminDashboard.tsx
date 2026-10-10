@@ -23,6 +23,7 @@ import { useLabData } from '../context/LabDataContext';
 import { useAuth } from '../context/AuthContext';
 import type { BookingRecord } from '../context/LabDataContext';
 import type { LabTest } from '../data/labData';
+import { sanitizeNameInput, sanitizePhoneInput, sanitizeDigitsOnly } from '../utils/validation';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -1212,7 +1213,7 @@ export const AdminDashboard: React.FC = () => {
                   required
                   placeholder="e.g. Tariq Mehmood"
                   value={newBookingForm.patientName}
-                  onChange={(e) => setNewBookingForm({ ...newBookingForm, patientName: e.target.value })}
+                  onChange={(e) => setNewBookingForm({ ...newBookingForm, patientName: sanitizeNameInput(e.target.value) })}
                 />
               </div>
 
@@ -1224,7 +1225,7 @@ export const AdminDashboard: React.FC = () => {
                     required
                     placeholder="0300-1234567"
                     value={newBookingForm.phoneNumber}
-                    onChange={(e) => setNewBookingForm({ ...newBookingForm, phoneNumber: e.target.value })}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, phoneNumber: sanitizePhoneInput(e.target.value) })}
                   />
                 </div>
 
@@ -1252,10 +1253,10 @@ export const AdminDashboard: React.FC = () => {
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Total Amount Charged (PKR)</label>
                 <input
-                  type="number"
+                  type="text"
                   required
                   value={newBookingForm.totalAmount}
-                  onChange={(e) => setNewBookingForm({ ...newBookingForm, totalAmount: Number(e.target.value) })}
+                  onChange={(e) => setNewBookingForm({ ...newBookingForm, totalAmount: Number(sanitizeDigitsOnly(e.target.value)) })}
                 />
               </div>
 

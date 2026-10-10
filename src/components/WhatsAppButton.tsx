@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Phone, MessageCircle, Settings, X, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getWhatsAppUrl } from '../utils/whatsapp';
+import { sanitizePhoneInput } from '../utils/validation';
 
 export const WhatsAppButton: React.FC = () => {
   const { whatsAppConfig, updateWhatsAppConfig, isAdmin } = useAuth();
@@ -125,7 +126,7 @@ export const WhatsAppButton: React.FC = () => {
                   className="form-input"
                   style={{ paddingLeft: '1rem' }}
                   value={phoneInput}
-                  onChange={(e) => setPhoneInput(e.target.value)}
+                  onChange={(e) => setPhoneInput(sanitizePhoneInput(e.target.value))}
                   placeholder="+92 300 1234567"
                   required
                 />
@@ -138,7 +139,7 @@ export const WhatsAppButton: React.FC = () => {
                   className="form-input"
                   style={{ paddingLeft: '1rem' }}
                   value={numInput}
-                  onChange={(e) => setNumInput(e.target.value)}
+                  onChange={(e) => setNumInput(sanitizePhoneInput(e.target.value))}
                   placeholder="923001234567"
                   required
                 />
