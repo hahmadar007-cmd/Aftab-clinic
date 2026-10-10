@@ -10,13 +10,14 @@ export interface AuthResult {
 interface RegisteredAccount {
   id: string;
   fullName: string;
-  email: string;
+  emailOrPhone: string;
+  normalizedKey: string;
   passwordHash: string;
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, pass: string) => AuthResult;
-  register: (fullName: string, email: string, pass: string) => AuthResult;
+  login: (identifier: string, pass: string) => AuthResult;
+  register: (fullName: string, identifier: string, pass: string) => AuthResult;
   logout: () => void;
   whatsAppConfig: WhatsAppConfig;
   updateWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
@@ -24,6 +25,14 @@ interface AuthContextType extends AuthState {
 
 const ADMIN_EMAIL = 'aftabclinictestzone@gmail.com';
 const ADMIN_PASSWORD = 'tayyab__666';
+
+const normalizeIdentifier = (input: string): string => {
+  const trimmed = input.trim();
+  if (trimmed.includes('@')) {
+    return trimmed.toLowerCase();
+  }
+  return cleanWhatsAppNumber(trimmed);
+};
 
 const getRegisteredUsers = (): Record<string, RegisteredAccount> => {
   try {
@@ -59,12 +68,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return savedWA ? JSON.parse(savedWA) : DEFAULT_WHATSAPP;
   });
 
-  const login = (emailInput: string, passwordInput: string): AuthResult => {
-    const cleanEmail = emailInput.trim().toLowerCase();
+  const login = (identifierInput: string, passwordInput: string): AuthResult => {
+    const rawInput = identifierInput.trim();
     const cleanPassword = passwordInput.trim();
+    const normalizedKey = normalizeIdentifier(rawInput);
 
     // Check if admin email
-    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+    if (rawInput.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
       if (cleanPassword === ADMIN_PASSWORD) {
         const adminUser: User = {
           id: 'admin_sys',
@@ -87,12 +97,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Check regular patient authentication
     const usersMap = getRegisteredUsers();
-    const account = usersMap[cleanEmail];
+    const account = usersMap[normalizedKey] || usersMap[rawInput.toLowerCase()];
 
     if (!account) {
       return {
         success: false,
-        error: 'No account registered with this email address. Please click "Register here" to create an account.',
+        error: 'No account registered with this email or phone number. Please click "Register here" to create an account.',
       };
     }
 
@@ -103,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const patientUser: User = {
       id: account.id,
       fullName: account.fullName,
-      email: account.email,
+      email: account.emailOrPhone,
       isAdmin: false,
     };
 
@@ -118,27 +128,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const register = (fullName: string, emailInput: string, passwordInput: string): AuthResult => {
-    const cleanEmail = emailInput.trim().toLowerCase();
+  const register = (fullName: string, identifierInput: string, passwordInput: string): AuthResult => {
+    const rawInput = identifierInput.trim();
     const cleanPassword = passwordInput.trim();
+    const normalizedKey = normalizeIdentifier(rawInput);
 
-    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+    if (rawInput.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
       return { success: false, error: 'This email address is reserved for Administrator access.' };
     }
 
     const usersMap = getRegisteredUsers();
-    if (usersMap[cleanEmail]) {
-      return { success: false, error: 'An account with this email address already exists. Please sign in instead.' };
+    if (usersMap[normalizedKey] || usersMap[rawInput.toLowerCase()]) {
+      return { success: false, error: 'An account with this email address or phone number already exists. Please sign in instead.' };
     }
 
     const newAccount: RegisteredAccount = {
       id: 'usr_' + Date.now(),
       fullName: fullName.trim(),
-      email: cleanEmail,
+      emailOrPhone: rawInput,
+      normalizedKey,
       passwordHash: cleanPassword,
     };
 
-    usersMap[cleanEmail] = newAccount;
+    usersMap[normalizedKey] = newAccount;
+    if (rawInput.toLowerCase() !== normalizedKey) {
+      usersMap[rawInput.toLowerCase()] = newAccount;
+    }
+
     localStorage.setItem('aftab_clinic_registered_users', JSON.stringify(usersMap));
 
     return { success: true };

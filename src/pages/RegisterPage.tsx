@@ -23,8 +23,13 @@ export const RegisterPage: React.FC = () => {
       setErrorMessage('Please enter your full name.');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
+    const cleanIdentifier = email.trim();
+    if (!cleanIdentifier) {
+      setErrorMessage('Please enter your email address or phone number.');
+      return;
+    }
+    if (!cleanIdentifier.includes('@') && cleanIdentifier.replace(/[^0-9]/g, '').length < 10) {
+      setErrorMessage('Please enter a valid Email Address or Phone Number (at least 10 digits).');
       return;
     }
     if (!password || password.length < 6) {
@@ -141,14 +146,14 @@ export const RegisterPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Email Address */}
+              {/* Email Address or Phone Number */}
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <div className="input-wrapper">
                   <Mail className="input-icon" size={18} />
                   <input
-                    type="email"
+                    type="text"
                     className="form-input"
-                    placeholder="Email Address"
+                    placeholder="Email Address or Phone Number (e.g. 03001234567)"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
