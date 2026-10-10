@@ -193,82 +193,16 @@ export const AdminDashboard: React.FC = () => {
     setIsNewBookingModalOpen(false);
   };
 
-  // Helper to generate dynamic test parameters for customer's chosen tests
-  const generateParamsForBooking = (tests: { code: string; name: string; price: number }[]): ReportParamRow[] => {
-    const params: ReportParamRow[] = [];
-
-    tests.forEach((t) => {
-      const nameLower = t.name.toLowerCase();
-      if (nameLower.includes('cbc') || nameLower.includes('complete examination')) {
-        params.push(
-          { parameter: 'Hemoglobin (Hb)', value: '14.5', unit: 'g/dL', referenceRange: '13.5 - 17.5', status: 'Normal' },
-          { parameter: 'TLC / White Blood Cells', value: '7,400', unit: '/cmm', referenceRange: '4,000 - 11,000', status: 'Normal' },
-          { parameter: 'Platelet Count', value: '250,000', unit: '/cmm', referenceRange: '150,000 - 450,000', status: 'Normal' },
-          { parameter: 'RBC Count', value: '4.8', unit: 'x10^6/uL', referenceRange: '4.5 - 5.9', status: 'Normal' }
-        );
-      } else if (nameLower.includes('lipid')) {
-        params.push(
-          { parameter: 'Total Cholesterol', value: '185', unit: 'mg/dL', referenceRange: '< 200 Desirable', status: 'Normal' },
-          { parameter: 'Triglycerides', value: '140', unit: 'mg/dL', referenceRange: '< 150 Normal', status: 'Normal' },
-          { parameter: 'HDL Cholesterol', value: '48', unit: 'mg/dL', referenceRange: '> 40 Normal', status: 'Normal' },
-          { parameter: 'LDL Cholesterol', value: '110', unit: 'mg/dL', referenceRange: '< 100 Optimal', status: 'Normal' }
-        );
-      } else if (nameLower.includes('thyroid') || nameLower.includes('tsh')) {
-        params.push(
-          { parameter: 'TSH (Thyroid Stimulating)', value: '2.40', unit: 'uIU/mL', referenceRange: '0.40 - 4.20', status: 'Normal' }
-        );
-        if (nameLower.includes('ft3')) {
-          params.push({ parameter: 'Free T3 (FT3)', value: '3.10', unit: 'pg/mL', referenceRange: '2.0 - 4.4', status: 'Normal' });
-        }
-        if (nameLower.includes('ft4')) {
-          params.push({ parameter: 'Free T4 (FT4)', value: '1.25', unit: 'ng/dL', referenceRange: '0.93 - 1.70', status: 'Normal' });
-        }
-      } else if (nameLower.includes('hba1c')) {
-        params.push(
-          { parameter: 'HbA1c (Glycated Hb)', value: '5.6', unit: '%', referenceRange: '< 5.7 Normal', status: 'Normal' }
-        );
-      } else if (nameLower.includes('glucose') || nameLower.includes('sugar')) {
-        params.push(
-          { parameter: 'Blood Glucose (Fasting)', value: '92', unit: 'mg/dL', referenceRange: '70 - 100 Fasting', status: 'Normal' }
-        );
-      } else if (nameLower.includes('lft') || nameLower.includes('liver')) {
-        params.push(
-          { parameter: 'Bilirubin Total', value: '0.8', unit: 'mg/dL', referenceRange: '0.2 - 1.2', status: 'Normal' },
-          { parameter: 'ALT (SGPT)', value: '32', unit: 'U/L', referenceRange: '< 45 U/L', status: 'Normal' },
-          { parameter: 'AST (SGOT)', value: '28', unit: 'U/L', referenceRange: '< 35 U/L', status: 'Normal' }
-        );
-      } else if (nameLower.includes('rft') || nameLower.includes('renal') || nameLower.includes('kidney')) {
-        params.push(
-          { parameter: 'Serum Creatinine', value: '0.9', unit: 'mg/dL', referenceRange: '0.6 - 1.2', status: 'Normal' },
-          { parameter: 'Blood Urea', value: '24', unit: 'mg/dL', referenceRange: '15 - 45', status: 'Normal' },
-          { parameter: 'Uric Acid', value: '5.4', unit: 'mg/dL', referenceRange: '3.5 - 7.2', status: 'Normal' }
-        );
-      } else {
-        params.push(
-          { parameter: t.name, value: 'Satisfactory / Normal', unit: 'Result', referenceRange: 'Standard', status: 'Normal' }
-        );
-      }
-    });
-
-    if (params.length === 0) {
-      params.push(
-        { parameter: 'General Diagnostic Examination', value: 'Satisfactory', unit: '-', referenceRange: 'Normal', status: 'Normal' }
-      );
-    }
-    return params;
-  };
-
-  // Report Creation Handler - Auto populates ALL tests chosen by customer
+  // Report Creation Handler - Opens clean report editor
   const handleOpenReportModal = (booking: BookingRecord) => {
     setSelectedReportBooking(booking);
     const testNamesTitle = booking.tests.map((t) => t.name).join(' + ') || 'Diagnostic Testing Report';
-    const initialParams = generateParamsForBooking(booking.tests);
 
     setReportForm({
       testName: testNamesTitle,
       pathologistName: 'Dr. S. A. Aftab (Consultant Pathologist, FCPS)',
       statusUpdate: 'Completed',
-      parameters: initialParams,
+      parameters: [{ parameter: '', value: '', unit: '', referenceRange: '', status: 'Normal' }],
     });
     setIsReportModalOpen(true);
   };
@@ -278,8 +212,15 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
       parameters: [
         ...prev.parameters,
-        { parameter: 'New Test Parameter', value: 'Normal', unit: 'u/L', referenceRange: 'Standard', status: 'Normal' },
+        { parameter: '', value: '', unit: '', referenceRange: '', status: 'Normal' },
       ],
+    }));
+  };
+
+  const handleClearAllParams = () => {
+    setReportForm((prev) => ({
+      ...prev,
+      parameters: [{ parameter: '', value: '', unit: '', referenceRange: '', status: 'Normal' }],
     }));
   };
 
@@ -1457,6 +1398,24 @@ export const AdminDashboard: React.FC = () => {
                     }}
                   >
                     <Plus size={14} /> Custom Row
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearAllParams}
+                    style={{
+                      background: '#fef2f2',
+                      color: 'var(--error-red)',
+                      border: '1px solid #fecaca',
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    title="Clear all rows to start empty"
+                  >
+                    Clear All
                   </button>
                 </div>
               </div>
