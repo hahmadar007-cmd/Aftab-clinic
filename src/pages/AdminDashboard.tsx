@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import type { BookingRecord } from '../context/LabDataContext';
 import type { LabTest } from '../data/labData';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeDigitsOnly } from '../utils/validation';
+import { getWhatsAppUrl } from '../utils/whatsapp';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -737,6 +738,20 @@ export const AdminDashboard: React.FC = () => {
                                 >
                                   <FileText size={14} /> Report
                                 </button>
+
+                                <a
+                                  href={getWhatsAppUrl(
+                                    booking.phoneNumber,
+                                    `Hello ${booking.patientName}, regarding your Aftab Clinic Lab Booking (Ref: ${booking.id}) for ${booking.tests.map(t => t.name).join(', ')}. Status: ${booking.status}. Amount: Rs. ${booking.totalAmount}. Track report: ${window.location.origin}/reports`
+                                  )}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn btn-whatsapp"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#fff', textDecoration: 'none' }}
+                                  title="Send WhatsApp / WhatsApp Business Message to Patient"
+                                >
+                                  <MessageCircle size={14} /> WhatsApp
+                                </a>
 
                                 <button
                                   onClick={() => deleteBooking(booking.id)}
