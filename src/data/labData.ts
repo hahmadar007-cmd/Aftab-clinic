@@ -195,3 +195,91 @@ export interface DiagnosticReport {
 }
 
 export const MOCK_REPORTS: Record<string, DiagnosticReport> = {};
+
+export interface StandardParameterPreset {
+  name: string;
+  unit: string;
+  referenceRange: string;
+  defaultValue: string;
+}
+
+export const STANDARD_MEDICAL_PARAMETERS: StandardParameterPreset[] = [
+  // Hematology / CBC
+  { name: 'Hemoglobin (Hb)', unit: 'g/dL', referenceRange: '13.5 - 17.5 (Male), 12.0 - 15.5 (Female)', defaultValue: '14.2' },
+  { name: 'TLC / White Blood Cells (WBC)', unit: '/cmm', referenceRange: '4,000 - 11,000', defaultValue: '7,400' },
+  { name: 'Platelet Count', unit: '/cmm', referenceRange: '150,000 - 450,000', defaultValue: '250,000' },
+  { name: 'RBC Count', unit: 'x10^6/uL', referenceRange: '4.5 - 5.9', defaultValue: '4.8' },
+  { name: 'Hematocrit (HCT)', unit: '%', referenceRange: '41.0 - 50.0', defaultValue: '44.0' },
+  { name: 'MCV (Mean Corpuscular Volume)', unit: 'fL', referenceRange: '80 - 96', defaultValue: '88' },
+  { name: 'MCH (Mean Corpuscular Hemoglobin)', unit: 'pg', referenceRange: '27.0 - 33.0', defaultValue: '29.5' },
+  { name: 'MCHC', unit: 'g/dL', referenceRange: '32.0 - 36.0', defaultValue: '34.0' },
+  { name: 'Neutrophils', unit: '%', referenceRange: '40 - 75', defaultValue: '62' },
+  { name: 'Lymphocytes', unit: '%', referenceRange: '20 - 45', defaultValue: '30' },
+  { name: 'Eosinophils', unit: '%', referenceRange: '1 - 6', defaultValue: '3' },
+  { name: 'Monocytes', unit: '%', referenceRange: '2 - 10', defaultValue: '5' },
+  { name: 'Basophils', unit: '%', referenceRange: '0 - 1', defaultValue: '0' },
+  { name: 'ESR (Erythrocyte Sedimentation Rate)', unit: 'mm/hr', referenceRange: '0 - 15 (Male), 0 - 20 (Female)', defaultValue: '8' },
+
+  // Blood Glucose / Diabetes
+  { name: 'Blood Glucose (Fasting)', unit: 'mg/dL', referenceRange: '70 - 100 Fasting', defaultValue: '92' },
+  { name: 'Blood Glucose (Random)', unit: 'mg/dL', referenceRange: '< 140 Random', defaultValue: '115' },
+  { name: 'HbA1c (Glycated Hemoglobin)', unit: '%', referenceRange: '< 5.7 Normal, 5.7 - 6.4 Prediabetes', defaultValue: '5.4' },
+  { name: 'Fasting Insulin', unit: 'uIU/mL', referenceRange: '2.6 - 24.9', defaultValue: '8.5' },
+
+  // Lipid Profile
+  { name: 'Total Cholesterol', unit: 'mg/dL', referenceRange: '< 200 Desirable', defaultValue: '175' },
+  { name: 'Triglycerides', unit: 'mg/dL', referenceRange: '< 150 Normal', defaultValue: '130' },
+  { name: 'HDL Cholesterol (Good)', unit: 'mg/dL', referenceRange: '> 40 Normal', defaultValue: '48' },
+  { name: 'LDL Cholesterol (Bad)', unit: 'mg/dL', referenceRange: '< 100 Optimal', defaultValue: '98' },
+  { name: 'VLDL Cholesterol', unit: 'mg/dL', referenceRange: '5 - 40', defaultValue: '26' },
+
+  // Liver Function Tests (LFT)
+  { name: 'ALT (SGPT)', unit: 'U/L', referenceRange: '< 45 U/L', defaultValue: '32' },
+  { name: 'AST (SGOT)', unit: 'U/L', referenceRange: '< 35 U/L', defaultValue: '26' },
+  { name: 'Alkaline Phosphatase (ALP)', unit: 'U/L', referenceRange: '44 - 147', defaultValue: '85' },
+  { name: 'Bilirubin Total', unit: 'mg/dL', referenceRange: '0.2 - 1.2', defaultValue: '0.8' },
+  { name: 'Bilirubin Direct', unit: 'mg/dL', referenceRange: '0.0 - 0.3', defaultValue: '0.2' },
+  { name: 'Serum Albumin', unit: 'g/dL', referenceRange: '3.5 - 5.2', defaultValue: '4.4' },
+  { name: 'Serum Globulin', unit: 'g/dL', referenceRange: '2.0 - 3.5', defaultValue: '2.8' },
+  { name: 'Total Protein', unit: 'g/dL', referenceRange: '6.0 - 8.3', defaultValue: '7.2' },
+
+  // Renal / Kidney Function Tests (RFT)
+  { name: 'Serum Creatinine', unit: 'mg/dL', referenceRange: '0.6 - 1.2', defaultValue: '0.9' },
+  { name: 'Blood Urea', unit: 'mg/dL', referenceRange: '15 - 45', defaultValue: '24' },
+  { name: 'BUN (Blood Urea Nitrogen)', unit: 'mg/dL', referenceRange: '7 - 20', defaultValue: '12' },
+  { name: 'Serum Uric Acid', unit: 'mg/dL', referenceRange: '3.5 - 7.2', defaultValue: '5.2' },
+  { name: 'Serum Sodium (Na+)', unit: 'mEq/L', referenceRange: '135 - 145', defaultValue: '140' },
+  { name: 'Serum Potassium (K+)', unit: 'mEq/L', referenceRange: '3.5 - 5.1', defaultValue: '4.2' },
+  { name: 'Serum Chloride (Cl-)', unit: 'mEq/L', referenceRange: '96 - 106', defaultValue: '101' },
+
+  // Thyroid Profile
+  { name: 'TSH (Thyroid Stimulating Hormone)', unit: 'uIU/mL', referenceRange: '0.40 - 4.20', defaultValue: '2.10' },
+  { name: 'Free T3 (FT3)', unit: 'pg/mL', referenceRange: '2.0 - 4.4', defaultValue: '3.10' },
+  { name: 'Free T4 (FT4)', unit: 'ng/dL', referenceRange: '0.93 - 1.70', defaultValue: '1.25' },
+  { name: 'Total T3', unit: 'ng/dL', referenceRange: '80 - 200', defaultValue: '130' },
+  { name: 'Total T4', unit: 'ug/dL', referenceRange: '5.1 - 14.1', defaultValue: '8.5' },
+
+  // Vitamins & Minerals
+  { name: 'Vitamin D (25-OH Total)', unit: 'ng/mL', referenceRange: '30 - 100 Sufficient', defaultValue: '38' },
+  { name: 'Vitamin B12 (Cobalamin)', unit: 'pg/mL', referenceRange: '200 - 900', defaultValue: '450' },
+  { name: 'Serum Calcium', unit: 'mg/dL', referenceRange: '8.5 - 10.5', defaultValue: '9.4' },
+  { name: 'Serum Iron', unit: 'ug/dL', referenceRange: '60 - 170', defaultValue: '110' },
+  { name: 'Serum Ferritin', unit: 'ng/mL', referenceRange: '30 - 400', defaultValue: '160' },
+
+  // Urine Examination
+  { name: 'Urine Color', unit: '-', referenceRange: 'Pale Yellow / Straw', defaultValue: 'Pale Yellow' },
+  { name: 'Urine pH', unit: '-', referenceRange: '4.6 - 8.0', defaultValue: '6.0' },
+  { name: 'Urine Specific Gravity', unit: '-', referenceRange: '1.005 - 1.030', defaultValue: '1.015' },
+  { name: 'Urine Protein', unit: '-', referenceRange: 'Nil / Negative', defaultValue: 'Nil' },
+  { name: 'Urine Sugar / Glucose', unit: '-', referenceRange: 'Nil / Negative', defaultValue: 'Nil' },
+  { name: 'Pus Cells (WBC)', unit: '/HPF', referenceRange: '0 - 5 /HPF', defaultValue: '1 - 2' },
+  { name: 'RBCs (Red Blood Cells)', unit: '/HPF', referenceRange: 'Nil / 0 - 2', defaultValue: 'Nil' },
+  { name: 'Epithelial Cells', unit: '/HPF', referenceRange: 'Few', defaultValue: 'Few' },
+
+  // Serology & Virology
+  { name: 'HBsAg (Hepatitis B Surface Antigen)', unit: '-', referenceRange: 'Non-Reactive', defaultValue: 'Non-Reactive' },
+  { name: 'Anti-HCV (Hepatitis C Antibody)', unit: '-', referenceRange: 'Non-Reactive', defaultValue: 'Non-Reactive' },
+  { name: 'HIV I & II Antibodies', unit: '-', referenceRange: 'Non-Reactive', defaultValue: 'Non-Reactive' },
+  { name: 'Typhi Dot (IgM)', unit: '-', referenceRange: 'Negative', defaultValue: 'Negative' },
+  { name: 'Dengue NS1 Antigen', unit: '-', referenceRange: 'Negative', defaultValue: 'Negative' },
+];

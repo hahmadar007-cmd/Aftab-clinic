@@ -22,7 +22,7 @@ import { Layout } from '../components/Layout';
 import { useLabData } from '../context/LabDataContext';
 import { useAuth } from '../context/AuthContext';
 import type { BookingRecord } from '../context/LabDataContext';
-import type { LabTest } from '../data/labData';
+import { STANDARD_MEDICAL_PARAMETERS, type LabTest } from '../data/labData';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeDigitsOnly } from '../utils/validation';
 import { getWhatsAppUrl } from '../utils/whatsapp';
 
@@ -290,10 +290,49 @@ export const AdminDashboard: React.FC = () => {
     }));
   };
 
+  const handleAddPresetParam = (presetName: string) => {
+    if (!presetName) return;
+    const preset = STANDARD_MEDICAL_PARAMETERS.find((p) => p.name === presetName);
+    if (!preset) return;
+    setReportForm((prev) => ({
+      ...prev,
+      parameters: [
+        ...prev.parameters,
+        {
+          parameter: preset.name,
+          value: preset.defaultValue,
+          unit: preset.unit,
+          referenceRange: preset.referenceRange,
+          status: 'Normal',
+        },
+      ],
+    }));
+  };
+
   const handleUpdateParamRow = (index: number, field: keyof ReportParamRow, value: string) => {
     setReportForm((prev) => {
       const updated = [...prev.parameters];
       updated[index] = { ...updated[index], [field]: value };
+
+      // Auto-fill unit & reference range when selecting/typing a matching standard medical test parameter
+      if (field === 'parameter') {
+        const match = STANDARD_MEDICAL_PARAMETERS.find(
+          (p) => p.name.toLowerCase() === value.trim().toLowerCase()
+        );
+        if (match) {
+          updated[index].parameter = match.name;
+          if (!updated[index].unit || updated[index].unit === 'Result') {
+            updated[index].unit = match.unit;
+          }
+          if (!updated[index].referenceRange || updated[index].referenceRange === 'Standard') {
+            updated[index].referenceRange = match.referenceRange;
+          }
+          if (!updated[index].value || updated[index].value === 'Satisfactory / Normal') {
+            updated[index].value = match.defaultValue;
+          }
+        }
+      }
+
       return { ...prev, parameters: updated };
     });
   };
@@ -1371,30 +1410,65 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {/* Dynamic Customer Test Parameter Findings List */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
                   Test Parameter Findings ({reportForm.parameters.length})
                 </span>
-                <button
-                  type="button"
-                  onClick={handleAddParamRow}
-                  style={{
-                    background: 'var(--primary-blue-light)',
-                    color: 'var(--primary-blue)',
-                    border: 'none',
-                    padding: '0.25rem 0.6rem',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                  }}
-                >
-                  <Plus size={14} /> Add Parameter Row
-                </button>
+
+                <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+                  <select
+                    onChange={(e) => {
+                      handleAddPresetParam(e.target.value);
+                      e.target.value = '';
+                    }}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-light)',
+                      backgroundColor: '#fff',
+                      cursor: 'pointer',
+                      maxWidth: '210px',
+                    }}
+                  >
+                    <option value="">+ Quick Add Preset Test...</option>
+                    {STANDARD_MEDICAL_PARAMETERS.map((preset) => (
+                      <option key={preset.name} value={preset.name}>
+                        {preset.name} ({preset.unit})
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleAddParamRow}
+                    style={{
+                      background: 'var(--primary-blue-light)',
+                      color: 'var(--primary-blue)',
+                      border: 'none',
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                    }}
+                  >
+                    <Plus size={14} /> Custom Row
+                  </button>
+                </div>
               </div>
+
+              {/* Datalist for autocomplete on initials */}
+              <datalist id="medical-parameters-datalist">
+                {STANDARD_MEDICAL_PARAMETERS.map((preset) => (
+                  <option key={preset.name} value={preset.name}>
+                    {preset.unit} (Ref: {preset.referenceRange})
+                  </option>
+                ))}
+              </datalist>
 
               <div style={{ maxHeight: '340px', overflowY: 'auto', marginBottom: '1.25rem', paddingRight: '0.25rem' }}>
                 {reportForm.parameters.map((param, idx) => (
@@ -1423,11 +1497,15 @@ export const AdminDashboard: React.FC = () => {
                       )}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.2fr', gap: '0.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr 1.2fr', gap: '0.5rem' }}>
                       <div>
-                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Name</label>
+                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
+                          Name (Type initials e.g. Hb, TLC, ALT)
+                        </label>
                         <input
                           type="text"
+                          list="medical-parameters-datalist"
+                          placeholder="Type initials (e.g. Hb, TLC, ALT)..."
                           style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
                           value={param.parameter}
                           onChange={(e) => handleUpdateParamRow(idx, 'parameter', e.target.value)}
