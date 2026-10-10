@@ -194,43 +194,4 @@ export interface DiagnosticReport {
   pathologist: string;
 }
 
-export const MOCK_REPORTS: Record<string, DiagnosticReport> = {
-  'AC-2026-8891': {
-    reportId: 'AC-2026-8891',
-    patientName: 'Muhammad Ahmad',
-    patientAge: 32,
-    patientGender: 'Male',
-    cnicPhone: '03001234567',
-    bookingDate: '2026-10-08',
-    testName: 'Blood Complete Examination (CBC)',
-    category: 'Hematology',
-    results: [
-      { parameter: 'Hemoglobin (Hb)', value: '14.8', unit: 'g/dL', referenceRange: '13.5 - 17.5', status: 'Normal' },
-      { parameter: 'Total Leukocyte Count (TLC)', value: '7,200', unit: '/cmm', referenceRange: '4,000 - 11,000', status: 'Normal' },
-      { parameter: 'Platelet Count', value: '245,000', unit: '/cmm', referenceRange: '150,000 - 450,000', status: 'Normal' },
-      { parameter: 'Erythrocyte Sedimentation Rate (ESR)', value: '12', unit: 'mm/1st hr', referenceRange: '0 - 15', status: 'Normal' },
-      { parameter: 'Hematocrit (PCV)', value: '44.2', unit: '%', referenceRange: '40.0 - 50.0', status: 'Normal' },
-    ],
-    pathologist: 'Dr. S. A. Aftab (FCPS Hematology & Pathology)',
-  },
-  'AC-2026-9042': {
-    reportId: 'AC-2026-9042',
-    patientName: 'Fatima Zahra',
-    patientAge: 45,
-    patientGender: 'Female',
-    cnicPhone: '03019876543',
-    bookingDate: '2026-10-09',
-    testName: '02 DIABETES & HEART CHECKUP',
-    category: 'Biochemistry',
-    results: [
-      { parameter: 'Fasting Blood Glucose', value: '112', unit: 'mg/dL', referenceRange: '70 - 99', status: 'Abnormal' },
-      { parameter: 'HbA1c (Glycated Hb)', value: '6.4', unit: '%', referenceRange: '4.0 - 5.6', status: 'Abnormal' },
-      { parameter: 'Serum Total Cholesterol', value: '215', unit: 'mg/dL', referenceRange: '< 200', status: 'Abnormal' },
-      { parameter: 'Serum Triglycerides', value: '160', unit: 'mg/dL', referenceRange: '< 150', status: 'Abnormal' },
-      { parameter: 'HDL Cholesterol (Good)', value: '42', unit: 'mg/dL', referenceRange: '> 40', status: 'Normal' },
-      { parameter: 'LDL Cholesterol (Bad)', value: '141', unit: 'mg/dL', referenceRange: '< 100', status: 'Abnormal' },
-      { parameter: 'Serum Creatinine', value: '0.9', unit: 'mg/dL', referenceRange: '0.6 - 1.1', status: 'Normal' },
-    ],
-    pathologist: 'Dr. S. A. Aftab (FCPS Hematology & Pathology)',
-  },
-};
+export const MOCK_REPORTS: Record<string, DiagnosticReport> = {};

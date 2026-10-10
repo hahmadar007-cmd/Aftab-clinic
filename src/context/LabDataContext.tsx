@@ -57,76 +57,7 @@ interface LabDataContextType {
   addReport: (report: Omit<LabReportRecord, 'reportId'>) => void;
 }
 
-const INITIAL_BOOKINGS: BookingRecord[] = [
-  {
-    id: 'AC-BK-789012',
-    patientName: 'Muhammad Ali',
-    phoneNumber: '0300-1234567',
-    age: '45 Yrs',
-    gender: 'Male',
-    collectionType: 'Home Collection',
-    address: 'House #42, Block B, Johar Town, Lahore',
-    date: '2026-10-10',
-    timeSlot: 'Morning (08:00 AM - 12:00 PM)',
-    tests: [
-      { code: '1300', name: 'Blood Complete Examination (CBC)', price: 700 },
-      { code: '1420', name: 'Lipid Profile (Full)', price: 2000 },
-    ],
-    totalAmount: 2700,
-    status: 'Pending',
-    paymentStatus: 'Unpaid',
-  },
-  {
-    id: 'AC-BK-789013',
-    patientName: 'Fatima Khan',
-    phoneNumber: '0321-9876543',
-    age: '32 Yrs',
-    gender: 'Female',
-    collectionType: 'Clinic Visit',
-    date: '2026-10-10',
-    timeSlot: 'Afternoon (12:00 PM - 04:00 PM)',
-    tests: [
-      { code: '1501', name: 'TSH (Thyroid Stimulating Hormone)', price: 1200 },
-      { code: '1502', name: 'FT3 (Free Triiodothyronine)', price: 1100 },
-      { code: '1503', name: 'FT4 (Free Thyroxine)', price: 1200 },
-    ],
-    totalAmount: 3500,
-    status: 'Confirmed',
-    paymentStatus: 'Paid',
-  },
-  {
-    id: 'AC-BK-789014',
-    patientName: 'Ahmed Raza',
-    phoneNumber: '0333-4567890',
-    age: '55 Yrs',
-    gender: 'Male',
-    collectionType: 'Clinic Visit',
-    date: '2026-10-09',
-    tests: [
-      { code: 'PKG-03', name: '03 COMPLETE HEALTH CHECKUP', price: 6999 },
-    ],
-    totalAmount: 6999,
-    status: 'Completed',
-    paymentStatus: 'Paid',
-  },
-  {
-    id: 'AC-BK-789015',
-    patientName: 'Zainab Bibi',
-    phoneNumber: '0312-3456789',
-    age: '28 Yrs',
-    gender: 'Female',
-    collectionType: 'Home Collection',
-    address: 'Flat 302, Gulberg III, Lahore',
-    date: '2026-10-08',
-    tests: [
-      { code: '1401', name: 'Blood Glucose (Fasting)', price: 300 },
-      { code: '1403', name: 'HbA1c (Glycated Hemoglobin)', price: 1400 },
-    ],
-    totalAmount: 1700,
-    status: 'Sample Collected',
-    paymentStatus: 'Paid',
-  },
-];
+const INITIAL_BOOKINGS: BookingRecord[] = [];
 
 const LabDataContext = createContext<LabDataContextType | undefined>(undefined);
 

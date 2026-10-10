@@ -12,7 +12,7 @@ export const ReportsPage: React.FC = () => {
   const location = useLocation();
 
   const [searchId, setSearchId] = useState('');
-  const [currentReport, setCurrentReport] = useState<DiagnosticReport | null>(MOCK_REPORTS['AC-2026-8891']);
+  const [currentReport, setCurrentReport] = useState<DiagnosticReport | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Find report helper
@@ -227,25 +227,6 @@ export const ReportsPage: React.FC = () => {
                   Search
                 </button>
               </form>
-
-              {/* Quick Demo Helper */}
-              <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-muted)', display: 'flex', flexWrap: 'wrap', gap: '0.375rem', alignItems: 'center' }}>
-                <span>Try Demo IDs:</span>
-                <button
-                  type="button"
-                  onClick={() => { setSearchId('AC-2026-8891'); setCurrentReport(MOCK_REPORTS['AC-2026-8891']); setErrorMsg(''); }}
-                  style={{ background: 'var(--primary-blue-light)', color: 'var(--primary-blue)', border: 'none', padding: '0.2rem 0.4rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}
-                >
-                  AC-2026-8891 (CBC)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setSearchId('AC-2026-9042'); setCurrentReport(MOCK_REPORTS['AC-2026-9042']); setErrorMsg(''); }}
-                  style={{ background: 'var(--primary-green-light)', color: 'var(--primary-green)', border: 'none', padding: '0.2rem 0.4rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}
-                >
-                  AC-2026-9042 (Diabetes)
-                </button>
-              </div>
 
               {errorMsg && (
                 <div style={{ backgroundColor: 'var(--error-bg)', color: 'var(--error-red)', padding: '0.625rem 0.875rem', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', marginTop: '0.875rem' }}>

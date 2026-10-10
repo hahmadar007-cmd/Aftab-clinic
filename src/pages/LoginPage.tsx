@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
@@ -37,18 +37,6 @@ export const LoginPage: React.FC = () => {
         navigate('/dashboard', { replace: true });
       }
     }
-  };
-
-  const fillDemoUser = () => {
-    setEmail('patient@aftabclinic.com');
-    setPassword('demoPass123');
-    setErrorMessage('');
-  };
-
-  const fillAdminUser = () => {
-    setEmail('aftabclinictestzone@gmail.com');
-    setPassword('tayyab__666');
-    setErrorMessage('');
   };
 
   return (
@@ -105,7 +93,7 @@ export const LoginPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Email / Username Field (No extra label, placeholder handles it) */}
+            {/* Email / Username Field */}
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <div className="input-wrapper">
                 <Mail className="input-icon" size={18} />
@@ -116,11 +104,12 @@ export const LoginPage: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="username"
+                  required
                 />
               </div>
             </div>
 
-            {/* Password Field (No extra label, placeholder handles it) */}
+            {/* Password Field */}
             <div className="form-group" style={{ marginBottom: '1.25rem' }}>
               <div className="input-wrapper">
                 <Lock className="input-icon" size={18} />
@@ -131,6 +120,7 @@ export const LoginPage: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
+                  required
                 />
                 <button
                   type="button"
@@ -152,61 +142,6 @@ export const LoginPage: React.FC = () => {
               <ArrowRight size={18} />
             </button>
           </form>
-
-          {/* Quick Demo Fill Helper */}
-          <div
-            style={{
-              marginTop: '1.5rem',
-              padding: '0.875rem 1rem',
-              backgroundColor: 'var(--primary-blue-light)',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.8125rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.625rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)', fontWeight: 600 }}>
-              <CheckCircle2 size={16} />
-              <span>Quick One-Click Logins:</span>
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
-              <button
-                type="button"
-                onClick={fillDemoUser}
-                style={{
-                  flex: 1,
-                  background: '#ffffff',
-                  color: 'var(--primary-blue)',
-                  border: '1px solid var(--primary-blue)',
-                  padding: '0.375rem 0.625rem',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                👤 Patient Fill
-              </button>
-              <button
-                type="button"
-                onClick={fillAdminUser}
-                style={{
-                  flex: 1,
-                  background: 'var(--primary-blue)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '0.375rem 0.625rem',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                👑 Admin Fill
-              </button>
-            </div>
-          </div>
 
           {/* Registration Link */}
           <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
