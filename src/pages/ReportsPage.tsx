@@ -1,24 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, FileText, Printer, ShieldCheck, Download } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { MOCK_REPORTS } from '../data/labData';
 import type { DiagnosticReport } from '../data/labData';
+import { useLabData } from '../context/LabDataContext';
 import jsPDF from 'jspdf';
 
 export const ReportsPage: React.FC = () => {
+  const { reports } = useLabData();
+  const location = useLocation();
+
   const [searchId, setSearchId] = useState('');
   const [currentReport, setCurrentReport] = useState<DiagnosticReport | null>(MOCK_REPORTS['AC-2026-8891']);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Find report helper
+  const findReportById = (idStr: string): DiagnosticReport | null => {
+    const cleanId = idStr.trim().toUpperCase();
+    if (!cleanId) return null;
+
+    // Check published dynamic reports in context
+    const published = reports.find(
+      (r) =>
+        r.reportId.toUpperCase() === cleanId ||
+        r.bookingId.toUpperCase() === cleanId ||
+        r.patientName.toUpperCase().includes(cleanId)
+    );
+
+    if (published) {
+      return {
+        reportId: published.reportId,
+        patientName: published.patientName,
+        patientAge: parseInt(published.patientAge || '35'),
+        patientGender: (published.patientGender === 'Female' ? 'Female' : 'Male') as 'Male' | 'Female',
+        cnicPhone: published.patientPhone || '03001234567',
+        testName: published.testName,
+        category: 'Biochemistry / Diagnostic Pathology',
+        bookingDate: published.date,
+        pathologist: published.pathologist,
+        results: published.results.map((r) => ({
+          parameter: r.parameter,
+          value: r.value,
+          unit: r.unit,
+          referenceRange: r.referenceRange,
+          status: r.status === 'Normal' ? 'Normal' : 'Abnormal',
+        })),
+      };
+    }
+
+    // Fallback to mock reports
+    if (MOCK_REPORTS[cleanId]) {
+      return MOCK_REPORTS[cleanId];
+    }
+    return null;
+  };
+
+  // Auto-search on page load if ?id=... parameter is present
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const paramId = queryParams.get('id');
+    if (paramId) {
+      setSearchId(paramId);
+      const found = findReportById(paramId);
+      if (found) {
+        setCurrentReport(found);
+        setErrorMsg('');
+      } else {
+        setErrorMsg(`No laboratory report found for ID "${paramId}".`);
+      }
+    } else if (reports.length > 0) {
+      // Show latest published report by default if available
+      const latest = reports[0];
+      const converted = findReportById(latest.reportId);
+      if (converted) setCurrentReport(converted);
+    }
+  }, [location.search, reports]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    const cleanId = searchId.trim().toUpperCase();
-    if (MOCK_REPORTS[cleanId]) {
-      setCurrentReport(MOCK_REPORTS[cleanId]);
+    const found = findReportById(searchId);
+    if (found) {
+      setCurrentReport(found);
     } else {
-      setErrorMsg(`No laboratory report found for ID "${searchId}". Try sample ID: AC-2026-8891 or AC-2026-9042`);
+      setErrorMsg(`No laboratory report found for ID "${searchId}". Try sample ID: AC-2026-8891 or check your Booking Ref ID.`);
     }
   };
 

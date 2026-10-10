@@ -30,7 +30,7 @@ interface BookingContextType {
   totalPrice: number;
   patientInfo: PatientInfo;
   setPatientInfo: React.Dispatch<React.SetStateAction<PatientInfo>>;
-  generateWhatsAppVoucher: (info: PatientInfo) => string;
+  generateWhatsAppVoucher: (info: PatientInfo, prescriptionFileName?: string) => string;
 }
 
 const DEFAULT_PATIENT: PatientInfo = {
@@ -89,11 +89,27 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price, 0);
 
-  const generateWhatsAppVoucher = (info: PatientInfo) => {
+  const generateWhatsAppVoucher = (info: PatientInfo, prescriptionFileName?: string) => {
     const bookingId = 'AC-BK-' + Math.floor(100000 + Math.random() * 900000);
-    const itemList = cart
-      .map((item, index) => `${index + 1}. [${item.code}] ${item.name} - Rs. ${item.price.toLocaleString()}`)
-      .join('\n');
+    
+    let detailsSection = '';
+    if (cart.length > 0) {
+      const itemList = cart
+        .map((item, index) => `${index + 1}. [${item.code}] ${item.name} - Rs. ${item.price.toLocaleString()}`)
+        .join('\n');
+      detailsSection = `📝 *TESTS & PACKAGES SELECTED*:\n${itemList}`;
+      if (prescriptionFileName) {
+        detailsSection += `\n\n📎 *ATTACHED PRESCRIPTION*: ${prescriptionFileName}`;
+      }
+    } else if (prescriptionFileName) {
+      detailsSection = `📎 *DOCTOR'S PRESCRIPTION ATTACHED*:\nFile Name: ${prescriptionFileName}\n(Please evaluate tests & send estimated quotation)`;
+    } else {
+      detailsSection = `💬 *DIAGNOSTIC INQUIRY & APPOINTMENT REQUEST*\n(Patient has requested sample collection / consultation)`;
+    }
+
+    const priceSection = totalPrice > 0 
+      ? `💵 *TOTAL AMOUNT*: *Rs. ${totalPrice.toLocaleString()} PKR*`
+      : `💵 *ESTIMATE*: Pending Lab Evaluation / Verification`;
 
     const message = `🧪 *AFTAB CLINIC DIAGNOSTIC BOOKING VOUCHER*
 ----------------------------------------
@@ -104,12 +120,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 🏥 *Collection Method*: ${info.collectionType}
 📅 *Preferred Date*: ${info.preferredDate || 'Earliest Available'}
 ⏰ *Time Slot*: ${info.preferredTimeSlot}
-${info.collectionType === 'Home Collection' ? `📍 *Home Address*: ${info.address}\n` : ''}
-----------------------------------------
-📝 *TESTS & PACKAGES SELECTED*:
-${itemList}
+${info.collectionType === 'Home Collection' ? `📍 *Home Address*: ${info.address}\n` : ''}----------------------------------------
+${detailsSection}
 
-💵 *TOTAL AMOUNT*: *Rs. ${totalPrice.toLocaleString()} PKR*
+${priceSection}
 ----------------------------------------
 Please confirm my appointment and diagnostic sample collection.`;
 

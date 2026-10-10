@@ -5,6 +5,7 @@ import { useBooking } from '../context/BookingContext';
 import type { PatientInfo } from '../context/BookingContext';
 import { useAuth } from '../context/AuthContext';
 import { useLabData } from '../context/LabDataContext';
+import { getWhatsAppUrl } from '../utils/whatsapp';
 
 export const BookingPage: React.FC = () => {
   const { cart, removeFromCart, clearCart, totalPrice, generateWhatsAppVoucher } = useBooking();
@@ -37,10 +38,6 @@ export const BookingPage: React.FC = () => {
       setErrorMsg('Please enter a valid contact mobile number.');
       return;
     }
-    if (cart.length === 0) {
-      setErrorMsg('Your booking cart is empty. Please select at least one test or health package.');
-      return;
-    }
     if (patientInfo.collectionType === 'Home Collection' && !patientInfo.address.trim()) {
       setErrorMsg('Please enter your home address for sample collection.');
       return;
@@ -55,15 +52,17 @@ export const BookingPage: React.FC = () => {
       collectionType: patientInfo.collectionType,
       address: patientInfo.address,
       timeSlot: patientInfo.preferredTimeSlot,
-      tests: cart.map((i) => ({ code: i.code, name: i.name, price: i.price })),
+      tests: cart.length > 0
+        ? cart.map((i) => ({ code: i.code, name: i.name, price: i.price }))
+        : [{ code: 'RX-REQ', name: prescriptionFile ? `Prescription File: ${prescriptionFile.name}` : 'Direct Booking / Inquiry', price: totalPrice }],
       totalAmount: totalPrice,
     });
 
-    const voucherMessage = generateWhatsAppVoucher(patientInfo);
-    const waUrl = `https://wa.me/${whatsAppConfig.phoneNumber}?text=${encodeURIComponent(voucherMessage)}`;
+    const voucherMessage = generateWhatsAppVoucher(patientInfo, prescriptionFile?.name);
+    const waUrl = getWhatsAppUrl(whatsAppConfig.phoneNumber, voucherMessage);
 
     window.open(waUrl, '_blank');
-    clearCart();
+    if (cart.length > 0) clearCart();
   };
 
   return (
@@ -377,13 +376,11 @@ export const BookingPage: React.FC = () => {
                   <button
                     type="submit"
                     className="btn btn-whatsapp"
-                    disabled={cart.length === 0}
                     style={{
                       width: '100%',
                       padding: '0.875rem',
                       fontSize: '0.9375rem',
                       marginTop: '1rem',
-                      opacity: cart.length === 0 ? 0.6 : 1,
                     }}
                   >
                     <MessageCircle size={20} />

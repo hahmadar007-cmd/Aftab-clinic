@@ -16,7 +16,7 @@ export interface BookingRecord {
   totalAmount: number;
   discountPercent?: number;
   discountAmount?: number;
-  status: 'Pending' | 'Confirmed' | 'Sample Collected' | 'Completed' | 'Cancelled';
+  status: 'Pending' | 'Confirmed' | 'Sample Collected' | 'In Process' | 'Completed' | 'Action Required' | 'Cancelled';
   paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
 }
 
@@ -24,10 +24,15 @@ export interface LabReportRecord {
   reportId: string;
   bookingId: string;
   patientName: string;
+  patientAge?: string;
+  patientGender?: string;
+  patientPhone?: string;
   date: string;
   testName: string;
+  testsList?: { code: string; name: string; price: number }[];
   results: { parameter: string; value: string; unit: string; referenceRange: string; status: 'Normal' | 'High' | 'Low' }[];
   pathologist: string;
+  notes?: string;
 }
 
 interface LabDataContextType {
@@ -228,6 +233,10 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       reportId: 'AC-REP-' + Math.floor(100000 + Math.random() * 900000),
     };
     saveReports([newReport, ...reports]);
+    // Automatically set corresponding booking status to Completed
+    if (report.bookingId) {
+      updateBookingStatus(report.bookingId, 'Completed');
+    }
   };
 
   return (

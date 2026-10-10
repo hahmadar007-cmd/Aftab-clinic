@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Phone, MessageCircle, Settings, X, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getWhatsAppUrl } from '../utils/whatsapp';
 
 export const WhatsAppButton: React.FC = () => {
   const { whatsAppConfig, updateWhatsAppConfig, isAdmin } = useAuth();
@@ -14,7 +15,7 @@ export const WhatsAppButton: React.FC = () => {
     if (!isAdmin) return;
     updateWhatsAppConfig({
       displayPhone: phoneInput,
-      phoneNumber: numInput.replace(/[^0-9]/g, ''),
+      phoneNumber: numInput,
     });
     setIsSaved(true);
     setTimeout(() => {
@@ -23,9 +24,7 @@ export const WhatsAppButton: React.FC = () => {
     }, 1200);
   };
 
-  const whatsappUrl = `https://wa.me/${whatsAppConfig.phoneNumber}?text=${encodeURIComponent(
-    whatsAppConfig.defaultMessage
-  )}`;
+  const whatsappUrl = getWhatsAppUrl(whatsAppConfig.phoneNumber, whatsAppConfig.defaultMessage);
 
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>

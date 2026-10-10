@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { User, AuthState, WhatsAppConfig } from '../types';
+import { cleanWhatsAppNumber } from '../utils/whatsapp';
 
 interface AuthContextType extends AuthState {
   login: (email: string, pass: string) => boolean;
@@ -104,6 +105,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
     const updated = { ...whatsAppConfig, ...newConfig };
+    if (updated.phoneNumber) {
+      updated.phoneNumber = cleanWhatsAppNumber(updated.phoneNumber);
+    }
     setWhatsAppConfig(updated);
     localStorage.setItem('aftab_clinic_wa', JSON.stringify(updated));
     return true;

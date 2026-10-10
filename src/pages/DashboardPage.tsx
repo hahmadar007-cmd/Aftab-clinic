@@ -14,13 +14,38 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { HEALTH_PACKAGES } from '../data/labData';
 import { Layout } from '../components/Layout';
+import { getWhatsAppUrl } from '../utils/whatsapp';
+
+import { useLabData } from '../context/LabDataContext';
 
 export const DashboardPage: React.FC = () => {
   const { user, whatsAppConfig } = useAuth();
+  const { bookings, reports } = useLabData();
 
-  const whatsappUrl = `https://wa.me/${whatsAppConfig.phoneNumber}?text=${encodeURIComponent(
+  const whatsappUrl = getWhatsAppUrl(
+    whatsAppConfig.phoneNumber,
     'Hello Aftab Clinic, I am logged into the patient portal and would like to ask a question.'
-  )}`;
+  );
+
+  // Status Badge Helper
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Completed':
+        return { bg: '#dcfce7', color: '#15803d', label: '✅ Report Published & Ready', icon: 'CheckCircle' };
+      case 'In Process':
+        return { bg: '#e0e7ff', color: '#3730a3', label: '🔬 Lab Testing In Process', icon: 'Clock' };
+      case 'Sample Collected':
+        return { bg: '#f3e8ff', color: '#6b21a8', label: '🩸 Sample Received at Lab', icon: 'Clock' };
+      case 'Confirmed':
+        return { bg: '#e0f2fe', color: '#0369a1', label: '📅 Booking Confirmed', icon: 'CheckCircle' };
+      case 'Action Required':
+        return { bg: '#fee2e2', color: '#b91c1c', label: '⚠️ Issue / Action Required', icon: 'AlertTriangle' };
+      case 'Cancelled':
+        return { bg: '#f1f5f9', color: '#475569', label: '❌ Cancelled', icon: 'X' };
+      default:
+        return { bg: '#fef3c7', color: '#b45309', label: '⏳ Pending Sample Collection', icon: 'Clock' };
+    }
+  };
 
   return (
     <div className="app-container">
@@ -86,6 +111,128 @@ export const DashboardPage: React.FC = () => {
               >
                 <Microscope size={280} color="#ffffff" />
               </div>
+            </div>
+
+            {/* LIVE BOOKINGS & REPORT STATUS TRACKER */}
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileText size={22} /> My Live Diagnostic Bookings & Report Status
+                </h2>
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                  Total Orders: <strong>{bookings.length}</strong>
+                </span>
+              </div>
+
+              {bookings.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: '2rem', backgroundColor: '#fff' }}>
+                  <Clock size={36} color="var(--text-muted)" style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
+                  <p style={{ color: 'var(--text-dark)', fontWeight: 600, margin: 0 }}>No active lab bookings found.</p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Book a test or health package to track sample collection and view signed reports online.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {bookings.map((booking) => {
+                    const badge = getStatusBadge(booking.status);
+                    const matchingReport = reports.find((r) => r.bookingId === booking.id);
+                    return (
+                      <div
+                        key={booking.id}
+                        className="card fade-in"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          borderLeft: `5px solid ${badge.color}`,
+                          padding: '1.25rem',
+                          boxShadow: 'var(--shadow-sm)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--primary-blue)' }}>
+                                {booking.patientName}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, backgroundColor: 'var(--primary-blue-light)', color: 'var(--primary-blue)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                                Ref ID: {booking.id}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                              {booking.date} • {booking.collectionType} ({booking.timeSlot || 'Morning'})
+                            </div>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div style={{ textAlign: 'right' }}>
+                            <span
+                              style={{
+                                fontSize: '0.8125rem',
+                                fontWeight: 700,
+                                backgroundColor: badge.bg,
+                                color: badge.color,
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: 'var(--radius-full)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.375rem',
+                              }}
+                            >
+                              {badge.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Ordered Tests List */}
+                        <div style={{ backgroundColor: 'var(--bg-slate)', borderRadius: 'var(--radius-md)', padding: '0.75rem', marginBottom: '1rem' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.375rem' }}>
+                            DIAGNOSTIC TESTS ORDERED:
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            {booking.tests.map((test, idx) => (
+                              <span
+                                key={idx}
+                                style={{
+                                  fontSize: '0.8125rem',
+                                  fontWeight: 600,
+                                  backgroundColor: '#ffffff',
+                                  color: 'var(--text-dark)',
+                                  border: '1px solid var(--border-light)',
+                                  padding: '0.25rem 0.5rem',
+                                  borderRadius: '6px',
+                                }}
+                              >
+                                [{test.code}] {test.name} - Rs. {test.price.toLocaleString()}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Action Row */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-green)' }}>
+                            Total Bill: Rs. {booking.totalAmount.toLocaleString()} PKR ({booking.paymentStatus})
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {booking.status === 'Completed' || matchingReport ? (
+                              <Link
+                                to={`/reports?id=${matchingReport?.reportId || booking.id}`}
+                                className="btn btn-primary"
+                                style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                              >
+                                <FileText size={16} /> View & Download Signed Report
+                              </Link>
+                            ) : (
+                              <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                <Clock size={15} /> Lab testing in progress. Signed report will appear here upon completion.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Quick Actions Grid */}

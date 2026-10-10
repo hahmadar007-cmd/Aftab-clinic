@@ -82,18 +82,25 @@ export const AdminDashboard: React.FC = () => {
     totalAmount: 1000,
   });
 
-  // New Report Form State
-  const [reportForm, setReportForm] = useState({
-    testName: 'Blood Complete Examination (CBC)',
-    parameter1Name: 'Hemoglobin (Hb)',
-    parameter1Val: '14.5',
-    parameter1Unit: 'g/dL',
-    parameter1Ref: '13.5 - 17.5',
-    parameter2Name: 'TLC / White Blood Cells',
-    parameter2Val: '7,400',
-    parameter2Unit: '/cmm',
-    parameter2Ref: '4,000 - 11,000',
-    pathologistName: 'Dr. Aftab Ahmed (Consultant Pathologist)',
+  // Dynamic Report Form Parameter Row
+  interface ReportParamRow {
+    parameter: string;
+    value: string;
+    unit: string;
+    referenceRange: string;
+    status: 'Normal' | 'High' | 'Low';
+  }
+
+  const [reportForm, setReportForm] = useState<{
+    testName: string;
+    pathologistName: string;
+    statusUpdate: BookingRecord['status'];
+    parameters: ReportParamRow[];
+  }>({
+    testName: '',
+    pathologistName: 'Dr. S. A. Aftab (Consultant Pathologist, FCPS)',
+    statusUpdate: 'Completed',
+    parameters: [],
   });
 
   // Calculate Statistics
@@ -184,14 +191,109 @@ export const AdminDashboard: React.FC = () => {
     setIsNewBookingModalOpen(false);
   };
 
-  // Report Creation Handler
+  // Helper to generate dynamic test parameters for customer's chosen tests
+  const generateParamsForBooking = (tests: { code: string; name: string; price: number }[]): ReportParamRow[] => {
+    const params: ReportParamRow[] = [];
+
+    tests.forEach((t) => {
+      const nameLower = t.name.toLowerCase();
+      if (nameLower.includes('cbc') || nameLower.includes('complete examination')) {
+        params.push(
+          { parameter: 'Hemoglobin (Hb)', value: '14.5', unit: 'g/dL', referenceRange: '13.5 - 17.5', status: 'Normal' },
+          { parameter: 'TLC / White Blood Cells', value: '7,400', unit: '/cmm', referenceRange: '4,000 - 11,000', status: 'Normal' },
+          { parameter: 'Platelet Count', value: '250,000', unit: '/cmm', referenceRange: '150,000 - 450,000', status: 'Normal' },
+          { parameter: 'RBC Count', value: '4.8', unit: 'x10^6/uL', referenceRange: '4.5 - 5.9', status: 'Normal' }
+        );
+      } else if (nameLower.includes('lipid')) {
+        params.push(
+          { parameter: 'Total Cholesterol', value: '185', unit: 'mg/dL', referenceRange: '< 200 Desirable', status: 'Normal' },
+          { parameter: 'Triglycerides', value: '140', unit: 'mg/dL', referenceRange: '< 150 Normal', status: 'Normal' },
+          { parameter: 'HDL Cholesterol', value: '48', unit: 'mg/dL', referenceRange: '> 40 Normal', status: 'Normal' },
+          { parameter: 'LDL Cholesterol', value: '110', unit: 'mg/dL', referenceRange: '< 100 Optimal', status: 'Normal' }
+        );
+      } else if (nameLower.includes('thyroid') || nameLower.includes('tsh')) {
+        params.push(
+          { parameter: 'TSH (Thyroid Stimulating)', value: '2.40', unit: 'uIU/mL', referenceRange: '0.40 - 4.20', status: 'Normal' }
+        );
+        if (nameLower.includes('ft3')) {
+          params.push({ parameter: 'Free T3 (FT3)', value: '3.10', unit: 'pg/mL', referenceRange: '2.0 - 4.4', status: 'Normal' });
+        }
+        if (nameLower.includes('ft4')) {
+          params.push({ parameter: 'Free T4 (FT4)', value: '1.25', unit: 'ng/dL', referenceRange: '0.93 - 1.70', status: 'Normal' });
+        }
+      } else if (nameLower.includes('hba1c')) {
+        params.push(
+          { parameter: 'HbA1c (Glycated Hb)', value: '5.6', unit: '%', referenceRange: '< 5.7 Normal', status: 'Normal' }
+        );
+      } else if (nameLower.includes('glucose') || nameLower.includes('sugar')) {
+        params.push(
+          { parameter: 'Blood Glucose (Fasting)', value: '92', unit: 'mg/dL', referenceRange: '70 - 100 Fasting', status: 'Normal' }
+        );
+      } else if (nameLower.includes('lft') || nameLower.includes('liver')) {
+        params.push(
+          { parameter: 'Bilirubin Total', value: '0.8', unit: 'mg/dL', referenceRange: '0.2 - 1.2', status: 'Normal' },
+          { parameter: 'ALT (SGPT)', value: '32', unit: 'U/L', referenceRange: '< 45 U/L', status: 'Normal' },
+          { parameter: 'AST (SGOT)', value: '28', unit: 'U/L', referenceRange: '< 35 U/L', status: 'Normal' }
+        );
+      } else if (nameLower.includes('rft') || nameLower.includes('renal') || nameLower.includes('kidney')) {
+        params.push(
+          { parameter: 'Serum Creatinine', value: '0.9', unit: 'mg/dL', referenceRange: '0.6 - 1.2', status: 'Normal' },
+          { parameter: 'Blood Urea', value: '24', unit: 'mg/dL', referenceRange: '15 - 45', status: 'Normal' },
+          { parameter: 'Uric Acid', value: '5.4', unit: 'mg/dL', referenceRange: '3.5 - 7.2', status: 'Normal' }
+        );
+      } else {
+        params.push(
+          { parameter: t.name, value: 'Satisfactory / Normal', unit: 'Result', referenceRange: 'Standard', status: 'Normal' }
+        );
+      }
+    });
+
+    if (params.length === 0) {
+      params.push(
+        { parameter: 'General Diagnostic Examination', value: 'Satisfactory', unit: '-', referenceRange: 'Normal', status: 'Normal' }
+      );
+    }
+    return params;
+  };
+
+  // Report Creation Handler - Auto populates ALL tests chosen by customer
   const handleOpenReportModal = (booking: BookingRecord) => {
     setSelectedReportBooking(booking);
+    const testNamesTitle = booking.tests.map((t) => t.name).join(' + ') || 'Diagnostic Testing Report';
+    const initialParams = generateParamsForBooking(booking.tests);
+
     setReportForm({
-      ...reportForm,
-      testName: booking.tests[0]?.name || 'Diagnostic Testing',
+      testName: testNamesTitle,
+      pathologistName: 'Dr. S. A. Aftab (Consultant Pathologist, FCPS)',
+      statusUpdate: 'Completed',
+      parameters: initialParams,
     });
     setIsReportModalOpen(true);
+  };
+
+  const handleAddParamRow = () => {
+    setReportForm((prev) => ({
+      ...prev,
+      parameters: [
+        ...prev.parameters,
+        { parameter: 'New Test Parameter', value: 'Normal', unit: 'u/L', referenceRange: 'Standard', status: 'Normal' },
+      ],
+    }));
+  };
+
+  const handleRemoveParamRow = (index: number) => {
+    setReportForm((prev) => ({
+      ...prev,
+      parameters: prev.parameters.filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const handleUpdateParamRow = (index: number, field: keyof ReportParamRow, value: string) => {
+    setReportForm((prev) => {
+      const updated = [...prev.parameters];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, parameters: updated };
+    });
   };
 
   const handlePublishReport = (e: React.FormEvent) => {
@@ -201,30 +303,19 @@ export const AdminDashboard: React.FC = () => {
     addReport({
       bookingId: selectedReportBooking.id,
       patientName: selectedReportBooking.patientName,
+      patientAge: selectedReportBooking.age,
+      patientGender: selectedReportBooking.gender,
+      patientPhone: selectedReportBooking.phoneNumber,
       date: new Date().toISOString().split('T')[0],
       testName: reportForm.testName,
-      results: [
-        {
-          parameter: reportForm.parameter1Name,
-          value: reportForm.parameter1Val,
-          unit: reportForm.parameter1Unit,
-          referenceRange: reportForm.parameter1Ref,
-          status: 'Normal',
-        },
-        {
-          parameter: reportForm.parameter2Name,
-          value: reportForm.parameter2Val,
-          unit: reportForm.parameter2Unit,
-          referenceRange: reportForm.parameter2Ref,
-          status: 'Normal',
-        },
-      ],
+      testsList: selectedReportBooking.tests,
+      results: reportForm.parameters,
       pathologist: reportForm.pathologistName,
     });
 
-    updateBookingStatus(selectedReportBooking.id, 'Completed', 'Paid');
+    updateBookingStatus(selectedReportBooking.id, reportForm.statusUpdate, 'Paid');
     setIsReportModalOpen(false);
-    alert('Lab Report Published successfully! Available under Patient Reports.');
+    alert(`Lab Report for ${selectedReportBooking.patientName} Published successfully! Available in Patient Portal.`);
   };
 
   // Filtered Lists
@@ -1200,85 +1291,160 @@ export const AdminDashboard: React.FC = () => {
         >
           <div
             className="card fade-in"
-            style={{ width: '100%', maxWidth: '580px', backgroundColor: '#fff', padding: '2rem', borderRadius: '24px', boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)' }}
+            style={{
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              backgroundColor: '#fff',
+              padding: '1.75rem',
+              borderRadius: '24px',
+              boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)',
+            }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
-                Publish Digital Report for {selectedReportBooking.patientName}
-              </h3>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
+                  Publish Digital Report for {selectedReportBooking.patientName}
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Ref ID: {selectedReportBooking.id} • {selectedReportBooking.gender}, {selectedReportBooking.age}
+                </span>
+              </div>
               <button onClick={() => setIsReportModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handlePublishReport}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Title</label>
-                <input
-                  type="text"
-                  value={reportForm.testName}
-                  onChange={(e) => setReportForm({ ...reportForm, testName: e.target.value })}
-                />
-              </div>
-
-              <div style={{ border: '1px solid var(--border-light)', padding: '0.875rem', borderRadius: '6px', marginBottom: '1rem', backgroundColor: 'var(--bg-slate)' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '0.5rem', color: 'var(--primary-blue)' }}>
-                  Parameter Finding #1
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Title / Tests Included</label>
+                  <input
+                    type="text"
+                    required
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                    value={reportForm.testName}
+                    onChange={(e) => setReportForm({ ...reportForm, testName: e.target.value })}
+                  />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-                  <input
-                    type="text"
-                    placeholder="Param Name"
-                    value={reportForm.parameter1Name}
-                    onChange={(e) => setReportForm({ ...reportForm, parameter1Name: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Value"
-                    value={reportForm.parameter1Val}
-                    onChange={(e) => setReportForm({ ...reportForm, parameter1Val: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Ref Range"
-                    value={reportForm.parameter1Ref}
-                    onChange={(e) => setReportForm({ ...reportForm, parameter1Ref: e.target.value })}
-                  />
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Status Update</label>
+                  <select
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}
+                    value={reportForm.statusUpdate}
+                    onChange={(e) => setReportForm({ ...reportForm, statusUpdate: e.target.value as any })}
+                  >
+                    <option value="Completed">Completed (Issue Signed Report)</option>
+                    <option value="In Process">In Process</option>
+                    <option value="Sample Collected">Sample Collected</option>
+                    <option value="Action Required">Action Required / Issue</option>
+                  </select>
                 </div>
               </div>
 
-              <div style={{ border: '1px solid var(--border-light)', padding: '0.875rem', borderRadius: '6px', marginBottom: '1.25rem', backgroundColor: 'var(--bg-slate)' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '0.5rem', color: 'var(--primary-blue)' }}>
-                  Parameter Finding #2
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-                  <input
-                    type="text"
-                    placeholder="Param Name"
-                    value={reportForm.parameter2Name}
-                    onChange={(e) => setReportForm({ ...reportForm, parameter2Name: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Value"
-                    value={reportForm.parameter2Val}
-                    onChange={(e) => setReportForm({ ...reportForm, parameter2Val: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Ref Range"
-                    value={reportForm.parameter2Ref}
-                    onChange={(e) => setReportForm({ ...reportForm, parameter2Ref: e.target.value })}
-                  />
-                </div>
+              {/* Dynamic Customer Test Parameter Findings List */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
+                  Test Parameter Findings ({reportForm.parameters.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddParamRow}
+                  style={{
+                    background: 'var(--primary-blue-light)',
+                    color: 'var(--primary-blue)',
+                    border: 'none',
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}
+                >
+                  <Plus size={14} /> Add Parameter Row
+                </button>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <div style={{ maxHeight: '340px', overflowY: 'auto', marginBottom: '1.25rem', paddingRight: '0.25rem' }}>
+                {reportForm.parameters.map((param, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      border: '1px solid var(--border-light)',
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      marginBottom: '0.625rem',
+                      backgroundColor: 'var(--bg-slate)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.375rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.75rem', color: 'var(--primary-blue)' }}>
+                        Parameter #{idx + 1}
+                      </span>
+                      {reportForm.parameters.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveParamRow(idx)}
+                          style={{ background: 'none', border: 'none', color: 'var(--error-red)', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                        >
+                          <Trash2 size={13} /> Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.2fr', gap: '0.5rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Name</label>
+                        <input
+                          type="text"
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
+                          value={param.parameter}
+                          onChange={(e) => handleUpdateParamRow(idx, 'parameter', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Value</label>
+                        <input
+                          type="text"
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
+                          value={param.value}
+                          onChange={(e) => handleUpdateParamRow(idx, 'value', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Unit</label>
+                        <input
+                          type="text"
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
+                          value={param.unit}
+                          onChange={(e) => handleUpdateParamRow(idx, 'unit', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Ref Range</label>
+                        <input
+                          type="text"
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
+                          value={param.referenceRange}
+                          onChange={(e) => handleUpdateParamRow(idx, 'referenceRange', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
                 <button type="button" onClick={() => setIsReportModalOpen(false)} className="btn btn-outline">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Publish Lab Report
+                <button type="submit" className="btn btn-primary" style={{ padding: '0.6rem 1.25rem' }}>
+                  <FileText size={16} /> Publish & Issue Lab Report
                 </button>
               </div>
             </form>
