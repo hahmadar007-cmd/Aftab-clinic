@@ -2,9 +2,21 @@ import React, { createContext, useContext, useState } from 'react';
 import type { User, AuthState, WhatsAppConfig } from '../types';
 import { cleanWhatsAppNumber } from '../utils/whatsapp';
 
+export interface AuthResult {
+  success: boolean;
+  error?: string;
+}
+
+interface RegisteredAccount {
+  id: string;
+  fullName: string;
+  email: string;
+  passwordHash: string;
+}
+
 interface AuthContextType extends AuthState {
-  login: (email: string, pass: string) => boolean;
-  register: (fullName: string, email: string, pass: string) => boolean;
+  login: (email: string, pass: string) => AuthResult;
+  register: (fullName: string, email: string, pass: string) => AuthResult;
   logout: () => void;
   whatsAppConfig: WhatsAppConfig;
   updateWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
@@ -12,6 +24,15 @@ interface AuthContextType extends AuthState {
 
 const ADMIN_EMAIL = 'aftabclinictestzone@gmail.com';
 const ADMIN_PASSWORD = 'tayyab__666';
+
+const getRegisteredUsers = (): Record<string, RegisteredAccount> => {
+  try {
+    const raw = localStorage.getItem('aftab_clinic_registered_users');
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    return {};
+  }
+};
 
 const DEFAULT_WHATSAPP: WhatsAppConfig = {
   phoneNumber: '923001234567',
@@ -38,55 +59,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return savedWA ? JSON.parse(savedWA) : DEFAULT_WHATSAPP;
   });
 
-  const login = (email: string, password: string): boolean => {
-    // Check if admin credentials
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      const adminUser: User = {
-        id: 'admin_' + Date.now(),
-        fullName: 'Admin',
-        email: email,
-        isAdmin: true,
+  const login = (emailInput: string, passwordInput: string): AuthResult => {
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanPassword = passwordInput.trim();
+
+    // Check if admin email
+    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+      if (cleanPassword === ADMIN_PASSWORD) {
+        const adminUser: User = {
+          id: 'admin_sys',
+          fullName: 'Administrator',
+          email: ADMIN_EMAIL,
+          isAdmin: true,
+        };
+        localStorage.setItem('aftab_clinic_user', JSON.stringify(adminUser));
+        setAuthState({
+          user: adminUser,
+          isAuthenticated: true,
+          isLoading: false,
+          isAdmin: true,
+        });
+        return { success: true };
+      } else {
+        return { success: false, error: 'Invalid Administrator password. Please check your credentials.' };
+      }
+    }
+
+    // Check regular patient authentication
+    const usersMap = getRegisteredUsers();
+    const account = usersMap[cleanEmail];
+
+    if (!account) {
+      return {
+        success: false,
+        error: 'No account registered with this email address. Please click "Register here" to create an account.',
       };
-      localStorage.setItem('aftab_clinic_user', JSON.stringify(adminUser));
-      setAuthState({
-        user: adminUser,
-        isAuthenticated: true,
-        isLoading: false,
-        isAdmin: true,
-      });
-      return true;
     }
 
-    // Regular patient login
-    if (password.length < 4) {
-      return false;
+    if (account.passwordHash !== cleanPassword) {
+      return { success: false, error: 'Incorrect password. Please verify your password and try again.' };
     }
 
-    const mockUser: User = {
-      id: 'usr_' + Date.now(),
-      fullName: email.split('@')[0].toUpperCase(),
-      email: email,
+    const patientUser: User = {
+      id: account.id,
+      fullName: account.fullName,
+      email: account.email,
       isAdmin: false,
     };
-    localStorage.setItem('aftab_clinic_user', JSON.stringify(mockUser));
+
+    localStorage.setItem('aftab_clinic_user', JSON.stringify(patientUser));
     setAuthState({
-      user: mockUser,
+      user: patientUser,
       isAuthenticated: true,
       isLoading: false,
       isAdmin: false,
     });
-    return true;
+
+    return { success: true };
   };
 
-  const register = (fullName: string, email: string): boolean => {
-    const newUser: User = {
+  const register = (fullName: string, emailInput: string, passwordInput: string): AuthResult => {
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanPassword = passwordInput.trim();
+
+    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+      return { success: false, error: 'This email address is reserved for Administrator access.' };
+    }
+
+    const usersMap = getRegisteredUsers();
+    if (usersMap[cleanEmail]) {
+      return { success: false, error: 'An account with this email address already exists. Please sign in instead.' };
+    }
+
+    const newAccount: RegisteredAccount = {
       id: 'usr_' + Date.now(),
-      fullName,
-      email,
-      isAdmin: false,
+      fullName: fullName.trim(),
+      email: cleanEmail,
+      passwordHash: cleanPassword,
     };
-    localStorage.setItem('aftab_registered_' + email, JSON.stringify(newUser));
-    return true;
+
+    usersMap[cleanEmail] = newAccount;
+    localStorage.setItem('aftab_clinic_registered_users', JSON.stringify(usersMap));
+
+    return { success: true };
   };
 
   const logout = () => {

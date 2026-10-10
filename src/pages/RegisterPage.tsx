@@ -36,12 +36,14 @@ export const RegisterPage: React.FC = () => {
       return;
     }
 
-    const success = register(fullName, email, password);
-    if (success) {
+    const result = register(fullName, email, password);
+    if (result.success) {
       setIsSuccess(true);
       setTimeout(() => {
         navigate('/login', { replace: true });
       }, 1800);
+    } else {
+      setErrorMessage(result.error || 'Registration failed. Please try again.');
     }
   };
 

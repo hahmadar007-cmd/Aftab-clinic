@@ -29,13 +29,15 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const success = login(email, password);
-    if (success) {
+    const result = login(email, password);
+    if (result.success) {
       if (email.toLowerCase().trim() === 'aftabclinictestzone@gmail.com') {
         navigate('/admin', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
       }
+    } else {
+      setErrorMessage(result.error || 'Invalid credentials. Access denied.');
     }
   };
 
