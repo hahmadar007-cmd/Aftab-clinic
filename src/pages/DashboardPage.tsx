@@ -308,7 +308,7 @@ export const DashboardPage: React.FC = () => {
                 padding: '1.25rem',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flex: 1 }}>
                 <div
                   style={{
                     backgroundColor: 'var(--primary-blue-light)',
@@ -316,9 +316,12 @@ export const DashboardPage: React.FC = () => {
                     borderRadius: 'var(--radius-full)',
                     color: 'var(--primary-blue)',
                     flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
-                  <Clock size={24} />
+                  <Clock size={22} style={{ flexShrink: 0 }} />
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1rem', color: 'var(--text-dark)', marginBottom: '0.25rem' }}>
@@ -335,9 +338,9 @@ export const DashboardPage: React.FC = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-whatsapp"
-                style={{ padding: '0.625rem 1rem' }}
+                style={{ padding: '0.625rem 1rem', flexShrink: 0, width: 'fit-content' }}
               >
-                <MessageCircle size={18} />
+                <MessageCircle size={18} style={{ flexShrink: 0 }} />
                 <span>WhatsApp Contact</span>
               </a>
             </div>

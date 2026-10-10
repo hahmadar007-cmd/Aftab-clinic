@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, ShoppingBag } from 'lucide-react';
 import { useBooking } from '../context/BookingContext';
 import { WhatsAppButton } from './WhatsAppButton';
 
@@ -92,26 +92,46 @@ export const AppBar: React.FC<AppBarProps> = ({ onMenuClick }) => {
           </Link>
         </div>
 
-        {/* Right: WhatsApp Contact & Cart Badge */}
+        {/* Right: Cart Button & WhatsApp Contact */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          {cart.length > 0 && (
-            <Link
-              to="/book"
-              style={{
-                backgroundColor: 'var(--primary-green)',
-                color: '#ffffff',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                padding: '0.25rem 0.5rem',
-                borderRadius: 'var(--radius-full)',
-                minWidth: '24px',
-                textAlign: 'center',
-                textDecoration: 'none',
-              }}
-            >
-              {cart.length}
-            </Link>
-          )}
+          {/* Cart Icon & Badge */}
+          <Link
+            to="/book"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              backgroundColor: cart.length > 0 ? 'var(--primary-blue-light)' : 'transparent',
+              color: 'var(--primary-blue)',
+              padding: '0.4rem 0.75rem',
+              borderRadius: 'var(--radius-full)',
+              border: '1px solid var(--border-light)',
+              textDecoration: 'none',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              transition: 'all 0.15s ease-in-out',
+            }}
+            title="View Booking Cart"
+          >
+            <ShoppingBag size={18} color="var(--primary-blue)" style={{ flexShrink: 0 }} />
+            <span className="hide-on-mobile">Cart</span>
+            {cart.length > 0 && (
+              <span
+                style={{
+                  backgroundColor: 'var(--primary-green)',
+                  color: '#ffffff',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  padding: '0.15rem 0.45rem',
+                  borderRadius: 'var(--radius-full)',
+                  lineHeight: 1,
+                }}
+              >
+                {cart.length}
+              </span>
+            )}
+          </Link>
+
           <WhatsAppButton />
         </div>
       </div>
