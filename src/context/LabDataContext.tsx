@@ -14,6 +14,7 @@ export interface BookingRecord {
   timeSlot?: string;
   tests: { code: string; name: string; price: number }[];
   totalAmount: number;
+  discount?: number;
   status: 'Pending' | 'Confirmed' | 'Sample Collected' | 'Completed' | 'Cancelled';
   paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
 }
@@ -38,6 +39,7 @@ interface LabDataContextType {
   deleteTest: (id: string) => void;
   addBooking: (booking: Omit<BookingRecord, 'id' | 'date' | 'status' | 'paymentStatus'> & { id?: string }) => BookingRecord;
   updateBookingStatus: (id: string, status: BookingRecord['status'], paymentStatus?: BookingRecord['paymentStatus']) => void;
+  updateBookingDiscount: (id: string, discount: number) => void;
   deleteBooking: (id: string) => void;
   addReport: (report: Omit<LabReportRecord, 'reportId'>) => void;
 }
@@ -197,6 +199,19 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveBookings(updated);
   };
 
+  const updateBookingDiscount = (id: string, discount: number) => {
+    const updated = bookings.map((b) => {
+      if (b.id === id) {
+        return {
+          ...b,
+          discount: Math.max(0, discount),
+        };
+      }
+      return b;
+    });
+    saveBookings(updated);
+  };
+
   const deleteBooking = (id: string) => {
     const filtered = bookings.filter((b) => b.id !== id);
     saveBookings(filtered);
@@ -222,6 +237,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteTest,
         addBooking,
         updateBookingStatus,
+        updateBookingDiscount,
         deleteBooking,
         addReport,
       }}

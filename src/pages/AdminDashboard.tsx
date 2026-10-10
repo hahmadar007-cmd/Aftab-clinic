@@ -14,6 +14,7 @@ import {
   X,
   FileText,
   Shield,
+  Tag,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useLabData } from '../context/LabDataContext';
@@ -29,6 +30,7 @@ export const AdminDashboard: React.FC = () => {
     deleteTest,
     addBooking,
     updateBookingStatus,
+    updateBookingDiscount,
     deleteBooking,
     addReport,
   } = useLabData();
@@ -45,6 +47,7 @@ export const AdminDashboard: React.FC = () => {
 
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [selectedReceiptBooking, setSelectedReceiptBooking] = useState<BookingRecord | null>(null);
+  const [receiptDiscount, setReceiptDiscount] = useState<number>(0);
 
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -146,6 +149,7 @@ export const AdminDashboard: React.FC = () => {
   // Receipt Modal Handler
   const handlePrintReceipt = (booking: BookingRecord) => {
     setSelectedReceiptBooking(booking);
+    setReceiptDiscount(booking.discount || 0);
     setIsReceiptModalOpen(true);
   };
 
@@ -842,6 +846,53 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
+            {/* Admin Discount Control Box (hidden during print) */}
+            <div
+              className="no-print"
+              style={{
+                marginBottom: '1rem',
+                padding: '0.75rem 1rem',
+                backgroundColor: '#e0f2fe',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid #bae6fd',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)', fontWeight: 600, fontSize: '0.8125rem' }}>
+                <Tag size={16} />
+                <span>Apply Special Discount / Concession:</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Rs.</span>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={receiptDiscount}
+                  onChange={(e) => {
+                    const val = Math.max(0, Number(e.target.value));
+                    setReceiptDiscount(val);
+                    if (selectedReceiptBooking) {
+                      updateBookingDiscount(selectedReceiptBooking.id, val);
+                    }
+                  }}
+                  style={{
+                    width: '120px',
+                    padding: '0.3rem 0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid #0284c7',
+                    backgroundColor: '#ffffff',
+                  }}
+                />
+              </div>
+            </div>
+
             {/* Receipt Content Body */}
             <div id="printable-receipt" style={{ border: '1px solid #cbd5e1', padding: '1.25rem', borderRadius: '8px', backgroundColor: '#fafafa', marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', fontSize: '0.8125rem' }}>
@@ -884,18 +935,32 @@ export const AdminDashboard: React.FC = () => {
                 </tbody>
               </table>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px dashed #cbd5e1', paddingTop: '0.75rem' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Thank you for choosing Aftab Clinic.<br />
-                  *Computer Generated Official Cash Voucher.
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Total Paid:</span>
-                  <div style={{ fontSize: '1.375rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
-                    Rs. {selectedReceiptBooking.totalAmount.toLocaleString()}
+              {(() => {
+                const grossSubtotal = selectedReceiptBooking.tests.reduce((sum, t) => sum + t.price, 0);
+                const currentDiscount = receiptDiscount;
+                const netPayable = Math.max(0, grossSubtotal - currentDiscount);
+                return (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '2px dashed #cbd5e1', paddingTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Thank you for choosing Aftab Clinic.<br />
+                      *Official Computer Generated Cash Receipt.
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                        Gross Subtotal: <strong>Rs. {grossSubtotal.toLocaleString()}</strong>
+                      </div>
+                      {currentDiscount > 0 && (
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--primary-green)', fontWeight: 600, margin: '0.15rem 0' }}>
+                          Discount / Concession: <strong>- Rs. {currentDiscount.toLocaleString()}</strong>
+                        </div>
+                      )}
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-blue)', marginTop: '0.2rem' }}>
+                        Net Paid Total: Rs. {netPayable.toLocaleString()}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             {/* Modal Actions */}
