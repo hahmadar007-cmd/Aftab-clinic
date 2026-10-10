@@ -60,23 +60,22 @@ export const RegisterPage: React.FC = () => {
           className="card fade-in"
           style={{
             width: '100%',
-            maxWidth: '460px',
+            maxWidth: '440px',
             boxShadow: 'var(--shadow-lg)',
             border: '1px solid var(--border-light)',
             padding: '2.5rem 2rem',
           }}
         >
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <img
               src="/logo.png"
               alt="Aftab Clinic Logo"
-              style={{ height: '65px', width: 'auto', marginBottom: '0.75rem', objectFit: 'contain' }}
+              style={{ height: '70px', width: 'auto', marginBottom: '1.25rem', objectFit: 'contain' }}
             />
-            <h2 style={{ fontSize: '1.4rem', color: 'var(--primary-blue)' }}>Create Patient Account</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              Register for online lab report access & diagnostic booking
-            </p>
+            <h2 style={{ fontSize: '1.75rem', color: 'var(--primary-blue)', fontWeight: 700 }}>
+              Create Account
+            </h2>
           </div>
 
           {isSuccess ? (
@@ -100,7 +99,7 @@ export const RegisterPage: React.FC = () => {
                 className="btn btn-primary"
                 style={{ backgroundColor: 'var(--primary-green)' }}
               >
-                <span>Go to Login Now</span>
+                <span>Go to Sign In</span>
                 <ArrowRight size={16} />
               </button>
             </div>
@@ -127,14 +126,13 @@ export const RegisterPage: React.FC = () => {
               )}
 
               {/* Full Name */}
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <div className="input-wrapper">
                   <UserIcon className="input-icon" size={18} />
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. Muhammad Ahmad"
+                    placeholder="Full Name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                   />
@@ -142,14 +140,13 @@ export const RegisterPage: React.FC = () => {
               </div>
 
               {/* Email Address */}
-              <div className="form-group">
-                <label className="form-label">Email Address</label>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <div className="input-wrapper">
                   <Mail className="input-icon" size={18} />
                   <input
                     type="email"
                     className="form-input"
-                    placeholder="name@example.com"
+                    placeholder="Email Address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -157,14 +154,13 @@ export const RegisterPage: React.FC = () => {
               </div>
 
               {/* Password */}
-              <div className="form-group">
-                <label className="form-label">Password</label>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <div className="input-wrapper">
                   <Lock className="input-icon" size={18} />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     className="form-input"
-                    placeholder="At least 6 characters"
+                    placeholder="Password (at least 6 characters)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -179,14 +175,13 @@ export const RegisterPage: React.FC = () => {
               </div>
 
               {/* Confirm Password */}
-              <div className="form-group">
-                <label className="form-label">Confirm Password</label>
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                 <div className="input-wrapper">
                   <Lock className="input-icon" size={18} />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     className="form-input"
-                    placeholder="Re-enter password"
+                    placeholder="Confirm Password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
@@ -196,9 +191,9 @@ export const RegisterPage: React.FC = () => {
               <button
                 type="submit"
                 className="btn btn-primary"
-                style={{ width: '100%', marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--primary-green)' }}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', backgroundColor: 'var(--primary-green)' }}
               >
-                <span>Register Account</span>
+                <span>Create Account</span>
                 <ArrowRight size={18} />
               </button>
             </form>

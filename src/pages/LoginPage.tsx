@@ -56,23 +56,22 @@ export const LoginPage: React.FC = () => {
           className="card fade-in"
           style={{
             width: '100%',
-            maxWidth: '440px',
+            maxWidth: '420px',
             boxShadow: 'var(--shadow-lg)',
             border: '1px solid var(--border-light)',
             padding: '2.5rem 2rem',
           }}
         >
-          {/* Official Logo & Portal Title */}
+          {/* Logo & Clean Title */}
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <img
               src="/logo.png"
               alt="Aftab Clinic Logo"
-              style={{ height: '70px', width: 'auto', marginBottom: '1rem', objectFit: 'contain' }}
+              style={{ height: '70px', width: 'auto', marginBottom: '1.25rem', objectFit: 'contain' }}
             />
-            <h2 style={{ fontSize: '1.5rem', color: 'var(--primary-blue)' }}>Sign In to Patient Portal</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              Access diagnostic laboratory services & medical test results
-            </p>
+            <h2 style={{ fontSize: '1.75rem', color: 'var(--primary-blue)', fontWeight: 700 }}>
+              Sign In
+            </h2>
           </div>
 
           {errorMessage && (
@@ -96,15 +95,14 @@ export const LoginPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Email / Username Field */}
-            <div className="form-group">
-              <label className="form-label">Email Address or Username</label>
+            {/* Email / Username Field (No extra label, placeholder handles it) */}
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <div className="input-wrapper">
                 <Mail className="input-icon" size={18} />
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="name@example.com or username"
+                  placeholder="Email or Username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="username"
@@ -112,17 +110,14 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Password Field with Show/Hide Toggle */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="form-label">Password</label>
-              </div>
+            {/* Password Field (No extra label, placeholder handles it) */}
+            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
               <div className="input-wrapper">
                 <Lock className="input-icon" size={18} />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="form-input"
-                  placeholder="Enter your password"
+                  placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
@@ -141,18 +136,18 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ width: '100%', marginTop: '0.75rem', padding: '0.75rem' }}
+              style={{ width: '100%', padding: '0.75rem', fontSize: '1rem' }}
             >
-              <span>Sign In to Dashboard</span>
+              <span>Sign In</span>
               <ArrowRight size={18} />
             </button>
           </form>
 
-          {/* Quick Demo Credentials Assistant */}
+          {/* Quick Demo Fill Helper */}
           <div
             style={{
               marginTop: '1.5rem',
-              padding: '0.875rem',
+              padding: '0.75rem 1rem',
               backgroundColor: 'var(--primary-blue-light)',
               borderRadius: 'var(--radius-md)',
               fontSize: '0.8125rem',
@@ -163,7 +158,7 @@ export const LoginPage: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)' }}>
               <CheckCircle2 size={16} />
-              <span>Quick Patient Login? Use quick fill.</span>
+              <span>Quick Login? Use quick fill.</span>
             </div>
             <button
               type="button"
