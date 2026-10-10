@@ -27,25 +27,25 @@ export const WhatsAppButton: React.FC = () => {
   )}`;
 
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
       <a
         href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="btn btn-whatsapp"
         style={{
-          padding: '0.4rem 0.75rem',
-          borderRadius: 'var(--radius-full)',
+          width: '38px',
+          height: '38px',
+          padding: 0,
+          borderRadius: '50%',
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '0.375rem',
-          fontSize: '0.8125rem',
-          fontWeight: 600,
+          justifyContent: 'center',
+          flexShrink: 0,
         }}
         title={`Contact Aftab Clinic on WhatsApp (${whatsAppConfig.displayPhone})`}
       >
-        <MessageCircle size={18} style={{ flexShrink: 0 }} />
-        <span>WhatsApp</span>
+        <MessageCircle size={20} style={{ flexShrink: 0 }} />
       </a>
 
       <button
@@ -61,6 +61,7 @@ export const WhatsAppButton: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           transition: 'color 0.2s',
+          flexShrink: 0,
         }}
         title="Configure WhatsApp Contact Number"
       >

@@ -27,15 +27,15 @@ export const AppBar: React.FC<AppBarProps> = ({ onMenuClick }) => {
         style={{
           maxWidth: '1280px',
           margin: '0 auto',
-          padding: '0.625rem 1rem',
+          padding: '0.625rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '0.5rem',
+          gap: '1rem',
         }}
       >
         {/* Left: Menu Icon & Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {onMenuClick && (
             <button
               onClick={onMenuClick}
@@ -55,7 +55,7 @@ export const AppBar: React.FC<AppBarProps> = ({ onMenuClick }) => {
             </button>
           )}
 
-          <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <img
               src="/logo.png"
               alt="Aftab Clinic Logo"
@@ -92,39 +92,47 @@ export const AppBar: React.FC<AppBarProps> = ({ onMenuClick }) => {
           </Link>
         </div>
 
-        {/* Right: Cart Button & WhatsApp Contact */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+        {/* Right: Cart Icon & WhatsApp Icon */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           {/* Cart Icon & Badge */}
           <Link
             to="/book"
             style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              backgroundColor: cart.length > 0 ? 'var(--primary-blue-light)' : '#f8fafc',
+              border: '1px solid var(--border-light)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.375rem',
-              backgroundColor: cart.length > 0 ? 'var(--primary-blue-light)' : 'transparent',
+              justifyContent: 'center',
               color: 'var(--primary-blue)',
-              padding: '0.4rem 0.75rem',
-              borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--border-light)',
               textDecoration: 'none',
-              fontSize: '0.8125rem',
-              fontWeight: 600,
+              position: 'relative',
               transition: 'all 0.15s ease-in-out',
+              flexShrink: 0,
             }}
-            title="View Booking Cart"
+            title={`Booking Cart (${cart.length} items)`}
           >
-            <ShoppingBag size={18} color="var(--primary-blue)" style={{ flexShrink: 0 }} />
-            <span className="hide-on-mobile">Cart</span>
+            <ShoppingBag size={19} color="var(--primary-blue)" style={{ flexShrink: 0 }} />
             {cart.length > 0 && (
               <span
                 style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
                   backgroundColor: 'var(--primary-green)',
                   color: '#ffffff',
-                  fontSize: '0.75rem',
+                  fontSize: '0.7rem',
                   fontWeight: 700,
-                  padding: '0.15rem 0.45rem',
-                  borderRadius: 'var(--radius-full)',
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   lineHeight: 1,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                 }}
               >
                 {cart.length}
