@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 export const SplashPage: React.FC = () => {
   const navigate = useNavigate();
@@ -118,25 +118,10 @@ export const SplashPage: React.FC = () => {
             fontSize: '0.8125rem',
             color: 'var(--primary-green)',
             fontWeight: 600,
-            marginBottom: '2rem',
           }}
         >
           <ShieldCheck size={16} /> Precision Testing • Accredited Quality
         </div>
-
-        {/* Quick Skip Option */}
-        <button
-          onClick={() => navigate('/login', { replace: true })}
-          className="btn btn-outline"
-          style={{
-            fontSize: '0.8125rem',
-            padding: '0.375rem 1rem',
-            borderRadius: 'var(--radius-full)',
-          }}
-        >
-          <span>Continue to Login</span>
-          <ArrowRight size={14} />
-        </button>
       </div>
 
       <div
@@ -147,7 +132,7 @@ export const SplashPage: React.FC = () => {
           color: 'var(--text-muted)',
         }}
       >
-        Aftab Clinic Diagnostic Laboratory Portal • Stage 1 Prototype
+        Aftab Clinic Diagnostic Laboratory Portal
       </div>
     </div>
   );
