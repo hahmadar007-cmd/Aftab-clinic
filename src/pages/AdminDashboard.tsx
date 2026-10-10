@@ -1323,6 +1323,39 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <form onSubmit={handlePublishReport}>
+              {/* Customer Chosen Tests Highlights */}
+              <div
+                style={{
+                  backgroundColor: 'var(--primary-blue-light)',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1rem',
+                }}
+              >
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary-blue)', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                  Customer Chosen Tests ({selectedReportBooking.tests.length}):
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  {selectedReportBooking.tests.map((t, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        backgroundColor: '#ffffff',
+                        color: 'var(--primary-blue)',
+                        border: '1px solid var(--primary-blue)',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: 'var(--radius-full)',
+                      }}
+                    >
+                      🧪 {t.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Title / Tests Included</label>

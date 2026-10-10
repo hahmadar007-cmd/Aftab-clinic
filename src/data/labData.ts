@@ -183,6 +183,7 @@ export interface DiagnosticReport {
   cnicPhone: string;
   bookingDate: string;
   testName: string;
+  testsRequested?: { code?: string; name: string; price?: number }[];
   category: string;
   results: {
     parameter: string;

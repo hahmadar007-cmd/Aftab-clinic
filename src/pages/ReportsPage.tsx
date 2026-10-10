@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, FileText, Printer, ShieldCheck, Download } from 'lucide-react';
+import { Search, FileText, Printer, ShieldCheck, Download, CheckCircle } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { MOCK_REPORTS } from '../data/labData';
 import type { DiagnosticReport } from '../data/labData';
@@ -36,6 +36,7 @@ export const ReportsPage: React.FC = () => {
         patientGender: (published.patientGender === 'Female' ? 'Female' : 'Male') as 'Male' | 'Female',
         cnicPhone: published.patientPhone || '03001234567',
         testName: published.testName,
+        testsRequested: published.testsList,
         category: 'Biochemistry / Diagnostic Pathology',
         bookingDate: published.date,
         pathologist: published.pathologist,
@@ -127,11 +128,23 @@ export const ReportsPage: React.FC = () => {
     doc.text(`Department: ${currentReport.category}`, 20, yPosition);
     yPosition += 15;
 
-    // Test Name
-    doc.setFontSize(14);
+    // Tests Requested
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 86, 179);
-    doc.text(`Test: ${currentReport.testName}`, 20, yPosition);
-    yPosition += 15;
+    doc.text('Investigation(s) Requested:', 20, yPosition);
+    yPosition += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+
+    const testListText = currentReport.testsRequested && currentReport.testsRequested.length > 0
+      ? currentReport.testsRequested.map((t) => t.name).join(', ')
+      : currentReport.testName;
+
+    const splitTestText = doc.splitTextToSize(testListText, 170);
+    doc.text(splitTestText, 20, yPosition);
+    yPosition += (splitTestText.length * 6) + 8;
 
     // Results Table
     doc.setFontSize(10);
@@ -312,10 +325,57 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Report Title */}
-                <h3 style={{ fontSize: '1rem', color: 'var(--primary-blue)', marginBottom: '0.875rem' }}>
-                  Test: {currentReport.testName}
-                </h3>
+                {/* Tests Requested / Patient Chosen Investigations */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--primary-blue-light)',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.875rem 1rem',
+                    marginBottom: '1.25rem',
+                  }}
+                >
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary-blue)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <CheckCircle size={15} /> Investigation(s) Requested / Customer Chosen Tests:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {currentReport.testsRequested && currentReport.testsRequested.length > 0 ? (
+                      currentReport.testsRequested.map((t, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            fontSize: '0.8125rem',
+                            fontWeight: 700,
+                            backgroundColor: '#ffffff',
+                            color: 'var(--primary-blue)',
+                            border: '1px solid var(--primary-blue)',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: 'var(--radius-full)',
+                          }}
+                        >
+                          🧪 {t.name}
+                        </span>
+                      ))
+                    ) : (
+                      currentReport.testName.split('+').map((name, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            fontSize: '0.8125rem',
+                            fontWeight: 700,
+                            backgroundColor: '#ffffff',
+                            color: 'var(--primary-blue)',
+                            border: '1px solid var(--primary-blue)',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: 'var(--radius-full)',
+                          }}
+                        >
+                          🧪 {name.trim()}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
 
                 {/* Test Results Table with Responsive Scroll */}
                 <div className="table-responsive">
