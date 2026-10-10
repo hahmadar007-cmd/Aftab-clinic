@@ -15,9 +15,12 @@ import {
   FileText,
   Shield,
   Tag,
+  MessageCircle,
+  Save,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useLabData } from '../context/LabDataContext';
+import { useAuth } from '../context/AuthContext';
 import type { BookingRecord } from '../context/LabDataContext';
 import type { LabTest } from '../data/labData';
 
@@ -35,6 +38,11 @@ export const AdminDashboard: React.FC = () => {
     addReport,
   } = useLabData();
 
+  const { whatsAppConfig, updateWhatsAppConfig } = useAuth();
+  const [waPhoneDisplay, setWaPhoneDisplay] = useState(whatsAppConfig.displayPhone);
+  const [waPhoneDigits, setWaPhoneDigits] = useState(whatsAppConfig.phoneNumber);
+  const [waSaveMsg, setWaSaveMsg] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'tests' | 'reports'>('overview');
 
   // Search & Filter state
@@ -47,7 +55,7 @@ export const AdminDashboard: React.FC = () => {
 
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [selectedReceiptBooking, setSelectedReceiptBooking] = useState<BookingRecord | null>(null);
-  const [receiptDiscount, setReceiptDiscount] = useState<number>(0);
+  const [receiptDiscountPercent, setReceiptDiscountPercent] = useState<number>(0);
 
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -149,7 +157,7 @@ export const AdminDashboard: React.FC = () => {
   // Receipt Modal Handler
   const handlePrintReceipt = (booking: BookingRecord) => {
     setSelectedReceiptBooking(booking);
-    setReceiptDiscount(booking.discount || 0);
+    setReceiptDiscountPercent(booking.discountPercent || 0);
     setIsReceiptModalOpen(true);
   };
 
@@ -393,6 +401,73 @@ export const AdminDashboard: React.FC = () => {
                       Rs. {totalRevenue.toLocaleString()}
                     </div>
                   </div>
+                </div>
+
+                {/* Admin WhatsApp Contact Config Card */}
+                <div className="card" style={{ marginBottom: '1.75rem', borderLeft: '4px solid var(--primary-green)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                      <MessageCircle size={22} color="var(--primary-green)" />
+                      <div>
+                        <h3 style={{ fontSize: '1.125rem', color: 'var(--primary-blue)', margin: 0, fontWeight: 700 }}>
+                          Official Clinic WhatsApp Contact Settings
+                        </h3>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                          Only logged-in Clinic Administrators can update the official WhatsApp number displayed across the website.
+                        </p>
+                      </div>
+                    </div>
+                    {waSaveMsg && (
+                      <span style={{ fontSize: '0.8125rem', color: 'var(--primary-green)', fontWeight: 700, backgroundColor: 'var(--success-bg)', padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)' }}>
+                        ✓ WhatsApp Number Updated Successfully!
+                      </span>
+                    )}
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      updateWhatsAppConfig({
+                        displayPhone: waPhoneDisplay,
+                        phoneNumber: waPhoneDigits.replace(/[^0-9]/g, ''),
+                      });
+                      setWaSaveMsg(true);
+                      setTimeout(() => setWaSaveMsg(false), 3000);
+                    }}
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}
+                  >
+                    <div>
+                      <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                        Display Phone Number (Formatted)
+                      </label>
+                      <input
+                        type="text"
+                        value={waPhoneDisplay}
+                        onChange={(e) => setWaPhoneDisplay(e.target.value)}
+                        placeholder="+92 300 1234567"
+                        style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                        WhatsApp Digits Only (International format)
+                      </label>
+                      <input
+                        type="text"
+                        value={waPhoneDigits}
+                        onChange={(e) => setWaPhoneDigits(e.target.value)}
+                        placeholder="923001234567"
+                        style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                      />
+                    </div>
+
+                    <div>
+                      <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+                        <Save size={16} /> Update WhatsApp Number
+                      </button>
+                    </div>
+                  </form>
                 </div>
 
                 {/* Quick Recent Activity */}
@@ -706,7 +781,7 @@ export const AdminDashboard: React.FC = () => {
         >
           <div
             className="card fade-in"
-            style={{ width: '100%', maxWidth: '500px', backgroundColor: '#fff', padding: '1.5rem', borderRadius: 'var(--radius-lg)' }}
+            style={{ width: '100%', maxWidth: '520px', backgroundColor: '#fff', padding: '2rem', borderRadius: '24px', boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
@@ -822,11 +897,11 @@ export const AdminDashboard: React.FC = () => {
             className="card fade-in"
             style={{
               width: '100%',
-              maxWidth: '650px',
+              maxWidth: '660px',
               backgroundColor: '#fff',
-              padding: '2rem',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-lg)',
+              padding: '2.25rem',
+              borderRadius: '24px',
+              boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-light)', paddingBottom: '1rem' }}>
@@ -846,7 +921,7 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Admin Discount Control Box (hidden during print) */}
+            {/* Admin Discount Control Box (Percentage % - hidden during print) */}
             <div
               className="no-print"
               style={{
@@ -856,40 +931,71 @@ export const AdminDashboard: React.FC = () => {
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid #bae6fd',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
+                flexDirection: 'column',
+                gap: '0.625rem',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)', fontWeight: 600, fontSize: '0.8125rem' }}>
-                <Tag size={16} />
-                <span>Apply Special Discount / Concession:</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-blue)', fontWeight: 600, fontSize: '0.8125rem' }}>
+                  <Tag size={16} />
+                  <span>Apply Concession / Discount Percentage (%):</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="0"
+                    value={receiptDiscountPercent || ''}
+                    onChange={(e) => {
+                      const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                      setReceiptDiscountPercent(val);
+                      if (selectedReceiptBooking) {
+                        updateBookingDiscount(selectedReceiptBooking.id, val);
+                      }
+                    }}
+                    style={{
+                      width: '75px',
+                      padding: '0.3rem 0.5rem',
+                      fontSize: '0.875rem',
+                      fontWeight: 700,
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid #0284c7',
+                      backgroundColor: '#ffffff',
+                      textAlign: 'center',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--primary-blue)' }}>%</span>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Rs.</span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={receiptDiscount}
-                  onChange={(e) => {
-                    const val = Math.max(0, Number(e.target.value));
-                    setReceiptDiscount(val);
-                    if (selectedReceiptBooking) {
-                      updateBookingDiscount(selectedReceiptBooking.id, val);
-                    }
-                  }}
-                  style={{
-                    width: '120px',
-                    padding: '0.3rem 0.5rem',
-                    fontSize: '0.875rem',
-                    fontWeight: 700,
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid #0284c7',
-                    backgroundColor: '#ffffff',
-                  }}
-                />
+
+              {/* Quick Preset Percentage Buttons */}
+              <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Quick presets:</span>
+                {[0, 5, 10, 15, 20, 25, 30, 50].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => {
+                      setReceiptDiscountPercent(pct);
+                      if (selectedReceiptBooking) {
+                        updateBookingDiscount(selectedReceiptBooking.id, pct);
+                      }
+                    }}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      borderRadius: 'var(--radius-sm)',
+                      border: receiptDiscountPercent === pct ? '1px solid var(--primary-blue)' : '1px solid #cbd5e1',
+                      backgroundColor: receiptDiscountPercent === pct ? 'var(--primary-blue)' : '#ffffff',
+                      color: receiptDiscountPercent === pct ? '#ffffff' : 'var(--text-body)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {pct === 0 ? 'No Disc' : `${pct}%`}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -903,7 +1009,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <strong>Status:</strong> <span style={{ color: 'var(--success-green)', fontWeight: 700 }}>PAID / CONFIRMED</span><br />
-                  <strong>Lab Contact:</strong> +92 300 1234567
+                  <strong>Lab Contact:</strong> {whatsAppConfig.displayPhone}
                 </div>
               </div>
 
@@ -937,8 +1043,9 @@ export const AdminDashboard: React.FC = () => {
 
               {(() => {
                 const grossSubtotal = selectedReceiptBooking.tests.reduce((sum, t) => sum + t.price, 0);
-                const currentDiscount = receiptDiscount;
-                const netPayable = Math.max(0, grossSubtotal - currentDiscount);
+                const currentPercent = receiptDiscountPercent;
+                const calcDiscAmount = Math.round((grossSubtotal * currentPercent) / 100);
+                const netPayable = Math.max(0, grossSubtotal - calcDiscAmount);
                 return (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '2px dashed #cbd5e1', paddingTop: '0.75rem' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -949,9 +1056,9 @@ export const AdminDashboard: React.FC = () => {
                       <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                         Gross Subtotal: <strong>Rs. {grossSubtotal.toLocaleString()}</strong>
                       </div>
-                      {currentDiscount > 0 && (
+                      {currentPercent > 0 && (
                         <div style={{ fontSize: '0.8125rem', color: 'var(--primary-green)', fontWeight: 600, margin: '0.15rem 0' }}>
-                          Discount / Concession: <strong>- Rs. {currentDiscount.toLocaleString()}</strong>
+                          Concession Discount ({currentPercent}%): <strong>- Rs. {calcDiscAmount.toLocaleString()}</strong>
                         </div>
                       )}
                       <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-blue)', marginTop: '0.2rem' }}>
@@ -995,7 +1102,7 @@ export const AdminDashboard: React.FC = () => {
         >
           <div
             className="card fade-in"
-            style={{ width: '100%', maxWidth: '500px', backgroundColor: '#fff', padding: '1.5rem', borderRadius: 'var(--radius-lg)' }}
+            style={{ width: '100%', maxWidth: '520px', backgroundColor: '#fff', padding: '2rem', borderRadius: '24px', boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
@@ -1093,7 +1200,7 @@ export const AdminDashboard: React.FC = () => {
         >
           <div
             className="card fade-in"
-            style={{ width: '100%', maxWidth: '550px', backgroundColor: '#fff', padding: '1.5rem', borderRadius: 'var(--radius-lg)' }}
+            style={{ width: '100%', maxWidth: '580px', backgroundColor: '#fff', padding: '2rem', borderRadius: '24px', boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>

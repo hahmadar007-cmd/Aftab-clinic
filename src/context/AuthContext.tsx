@@ -98,10 +98,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const updateWhatsAppConfig = (newConfig: Partial<WhatsAppConfig>) => {
+  const updateWhatsAppConfig = (newConfig: Partial<WhatsAppConfig>): boolean => {
+    if (!authState.isAdmin) {
+      console.warn('Unauthorized attempt: Only Admin can change WhatsApp configuration.');
+      return false;
+    }
     const updated = { ...whatsAppConfig, ...newConfig };
     setWhatsAppConfig(updated);
     localStorage.setItem('aftab_clinic_wa', JSON.stringify(updated));
+    return true;
   };
 
   return (

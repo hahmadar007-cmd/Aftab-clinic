@@ -14,7 +14,8 @@ export interface BookingRecord {
   timeSlot?: string;
   tests: { code: string; name: string; price: number }[];
   totalAmount: number;
-  discount?: number;
+  discountPercent?: number;
+  discountAmount?: number;
   status: 'Pending' | 'Confirmed' | 'Sample Collected' | 'Completed' | 'Cancelled';
   paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
 }
@@ -199,12 +200,16 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveBookings(updated);
   };
 
-  const updateBookingDiscount = (id: string, discount: number) => {
+  const updateBookingDiscount = (id: string, discountPercent: number) => {
     const updated = bookings.map((b) => {
       if (b.id === id) {
+        const gross = b.tests.reduce((sum, t) => sum + t.price, 0);
+        const calcPercent = Math.min(100, Math.max(0, discountPercent));
+        const discAmount = Math.round((gross * calcPercent) / 100);
         return {
           ...b,
-          discount: Math.max(0, discount),
+          discountPercent: calcPercent,
+          discountAmount: discAmount,
         };
       }
       return b;

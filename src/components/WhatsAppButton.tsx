@@ -3,7 +3,7 @@ import { Phone, MessageCircle, Settings, X, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const WhatsAppButton: React.FC = () => {
-  const { whatsAppConfig, updateWhatsAppConfig } = useAuth();
+  const { whatsAppConfig, updateWhatsAppConfig, isAdmin } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [phoneInput, setPhoneInput] = useState(whatsAppConfig.displayPhone);
   const [numInput, setNumInput] = useState(whatsAppConfig.phoneNumber);
@@ -11,6 +11,7 @@ export const WhatsAppButton: React.FC = () => {
 
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     updateWhatsAppConfig({
       displayPhone: phoneInput,
       phoneNumber: numInput.replace(/[^0-9]/g, ''),
@@ -48,28 +49,31 @@ export const WhatsAppButton: React.FC = () => {
         <MessageCircle size={20} style={{ flexShrink: 0 }} />
       </a>
 
-      <button
-        onClick={() => setIsModalOpen(true)}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--text-muted)',
-          cursor: 'pointer',
-          padding: '0.35rem',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'color 0.2s',
-          flexShrink: 0,
-        }}
-        title="Configure WhatsApp Contact Number"
-      >
-        <Settings size={15} />
-      </button>
+      {/* Admin-only configuration gear icon */}
+      {isAdmin && (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            padding: '0.35rem',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'color 0.2s',
+            flexShrink: 0,
+          }}
+          title="Admin: Configure Clinic WhatsApp Number"
+        >
+          <Settings size={15} />
+        </button>
+      )}
 
-      {/* Modal to configure WhatsApp Contact */}
-      {isModalOpen && (
+      {/* Modal to configure WhatsApp Contact (Admin Only) */}
+      {isModalOpen && isAdmin && (
         <div
           style={{
             position: 'fixed',
