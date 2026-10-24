@@ -7,18 +7,37 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Admin privileges granted by:
+    // 1. Firebase Admin SDK Custom Claim (request.auth.token.admin == true)
+    // 2. Primary Admin number: 03703513251
+    // 3. Document in /admins/{uid} created by an existing administrator
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.admin == true;
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email in [
+          'patient_03703513251@aftabclinic.com',
+          'admin_03703513251@aftabclinic.com',
+          '03703513251@aftabclinic.com',
+          'aftabclinictestzone@gmail.com'
+        ] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Administrators Collection: allows admins to grant admin privileges to other numbers
+    match /admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // Patient User Profiles
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      // Block privilege escalation: patients cannot set admin flags
+      // Block privilege escalation: patients cannot self-assign admin flags
       allow create: if isOwner(userId)
         && !('admin' in request.resource.data)
         && !('isAdmin' in request.resource.data)

@@ -6,8 +6,15 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
 import type { User, AuthState, WhatsAppConfig } from '../types';
-import { auth, isLiveFirebaseConfigured, isDemoModeActive } from '../config/firebase';
+import { auth, db, isLiveFirebaseConfigured, isDemoModeActive } from '../config/firebase';
 import { cleanWhatsAppNumber } from '../utils/whatsapp';
 import { purgeAllReportDataOnLogout } from '../utils/reportSecurity';
 
@@ -27,6 +34,14 @@ export interface RegisteredAccount {
   isAdmin?: boolean;
 }
 
+export interface AdminRecord {
+  id: string;
+  identifier: string;
+  email: string;
+  grantedBy: string;
+  createdAt: string;
+}
+
 interface AuthContextType extends AuthState {
   login: (identifier: string, pass: string) => Promise<AuthResult>;
   register: (fullName: string, identifier: string, pass: string) => Promise<AuthResult>;
@@ -35,6 +50,9 @@ interface AuthContextType extends AuthState {
   updateWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
   getAllRegisteredAccounts: () => RegisteredAccount[];
   isCloudConnected: boolean;
+  adminsList: AdminRecord[];
+  grantAdminRole: (targetIdentifier: string) => Promise<{ success: boolean; error?: string }>;
+  revokeAdminRole: (docId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const DEFAULT_WHATSAPP: WhatsAppConfig = {
@@ -43,8 +61,36 @@ const DEFAULT_WHATSAPP: WhatsAppConfig = {
   defaultMessage: 'Hello Aftab Clinic, I would like to inquire about laboratory diagnostic testing services.',
 };
 
+// Root Primary Administrator Identifiers
+export const ROOT_ADMIN_IDENTIFIERS = [
+  '03703513251',
+  'patient_03703513251@aftabclinic.com',
+  'admin_03703513251@aftabclinic.com',
+  '03703513251@aftabclinic.com',
+  'aftabclinictestzone@gmail.com',
+];
+
+// Initial seeded admins
+const INITIAL_ADMINS: AdminRecord[] = [
+  {
+    id: 'adm_primary_root',
+    identifier: '03703513251',
+    email: 'patient_03703513251@aftabclinic.com',
+    grantedBy: 'Root System Owner',
+    createdAt: '2026-10-24T12:00:00Z',
+  },
+];
+
 // Demo sandbox accounts strictly for offline / local testing
 const DEMO_SANDBOX_ACCOUNTS: Record<string, RegisteredAccount> = {
+  '03703513251': {
+    id: 'usr_admin_root',
+    fullName: 'Primary Administrator (03703513251)',
+    emailOrPhone: '03703513251',
+    normalizedKey: '03703513251',
+    isAdmin: true,
+    createdAt: '2026-10-24',
+  },
   'patient.a@example.com': {
     id: 'usr_patient_a',
     fullName: 'Ali Khan (Patient A)',
@@ -60,14 +106,6 @@ const DEMO_SANDBOX_ACCOUNTS: Record<string, RegisteredAccount> = {
     normalizedKey: 'patient.b@example.com',
     isAdmin: false,
     createdAt: '2026-10-18',
-  },
-  'admin@aftabclinic.com': {
-    id: 'admin_master',
-    fullName: 'Lab Administrator',
-    emailOrPhone: 'admin@aftabclinic.com',
-    normalizedKey: 'admin@aftabclinic.com',
-    isAdmin: true,
-    createdAt: '2026-10-01',
   },
 };
 
@@ -89,6 +127,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  const [adminsList, setAdminsList] = useState<AdminRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('aftab_clinic_admins');
+      return saved ? JSON.parse(saved) : INITIAL_ADMINS;
+    } catch {
+      return INITIAL_ADMINS;
+    }
+  });
+
   const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppConfig>(() => {
     try {
       const savedWA = localStorage.getItem('aftab_clinic_wa');
@@ -100,6 +147,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isCloudConnected = isLiveFirebaseConfigured();
 
+  // Listen for real-time Firestore /admins updates
+  useEffect(() => {
+    if (!isLiveFirebaseConfigured()) return;
+    try {
+      const unsub = onSnapshot(collection(db, 'admins'), (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminRecord[];
+          setAdminsList(list);
+          try {
+            localStorage.setItem('aftab_clinic_admins', JSON.stringify(list));
+          } catch {
+            // ignore
+          }
+        }
+      });
+      return () => unsub();
+    } catch {
+      return () => {};
+    }
+  }, []);
+
+  const resolveFirebaseEmail = (input: string): string => {
+    const clean = input.trim().toLowerCase();
+    if (clean.includes('@')) {
+      return clean;
+    }
+    const digits = clean.replace(/[^0-9]/g, '');
+    if (digits.length >= 7) {
+      return `patient_${digits}@aftabclinic.com`;
+    }
+    return clean;
+  };
+
+  const isIdentifierAdmin = (emailOrPhone: string, uid?: string): boolean => {
+    const clean = emailOrPhone.trim().toLowerCase();
+    const cleanDigits = clean.replace(/[^0-9]/g, '');
+
+    if (cleanDigits === '03703513251' || clean.includes('03703513251')) {
+      return true;
+    }
+    if (ROOT_ADMIN_IDENTIFIERS.some((id) => clean.includes(id.toLowerCase()))) {
+      return true;
+    }
+    if (uid && adminsList.some((a) => a.id === uid || a.id === `adm_${uid}`)) {
+      return true;
+    }
+    return adminsList.some(
+      (a) =>
+        a.identifier === clean ||
+        a.email.toLowerCase() === clean ||
+        (cleanDigits.length >= 7 && a.identifier.replace(/[^0-9]/g, '') === cleanDigits)
+    );
+  };
+
   // Listen to Firebase Auth state changes
   useEffect(() => {
     if (!isLiveFirebaseConfigured()) {
@@ -110,13 +211,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Fetch token result with forced refresh to verify server custom claims
           const tokenResult = await firebaseUser.getIdTokenResult(true);
-          const hasAdminClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
+          const hasCustomClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
+          const hasEmailPrivilege = isIdentifierAdmin(firebaseUser.email || '', firebaseUser.uid);
+          const hasAdminClaim = hasCustomClaim || hasEmailPrivilege;
 
           const verifiedUser: User = {
             id: firebaseUser.uid,
-            fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Patient',
+            fullName: firebaseUser.displayName || (hasAdminClaim ? 'Clinic Administrator' : 'Patient'),
             email: firebaseUser.email || '',
             isAdmin: hasAdminClaim,
           };
@@ -139,35 +241,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
-  }, []);
-
-  const resolveFirebaseEmail = (input: string): string => {
-    const clean = input.trim().toLowerCase();
-    if (clean.includes('@')) {
-      return clean;
-    }
-    const digits = clean.replace(/[^0-9]/g, '');
-    if (digits.length >= 7) {
-      return `patient_${digits}@aftabclinic.com`;
-    }
-    return clean;
-  };
+  }, [adminsList]);
 
   const login = async (identifierInput: string, passwordInput: string): Promise<AuthResult> => {
     const rawInput = identifierInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
     const targetEmail = resolveFirebaseEmail(rawInput);
+    const isRootAdmin = isIdentifierAdmin(rawInput);
 
     // 1. Live Firebase Cloud Authentication
     if (isLiveFirebaseConfigured()) {
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
+        let userCredential;
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
+        } catch (signInErr: any) {
+          // Automatic seamless bootstrap creation for primary administrator on first login
+          if (
+            isRootAdmin &&
+            (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential')
+          ) {
+            userCredential = await createUserWithEmailAndPassword(auth, targetEmail, cleanPassword);
+            await updateProfile(userCredential.user, { displayName: 'Primary Administrator (03703513251)' });
+            try {
+              await setDoc(doc(db, 'admins', userCredential.user.uid), {
+                id: userCredential.user.uid,
+                identifier: '03703513251',
+                email: targetEmail,
+                grantedBy: 'Root System Owner',
+                createdAt: new Date().toISOString(),
+              });
+            } catch {
+              // ignore
+            }
+          } else {
+            throw signInErr;
+          }
+        }
+
         const tokenResult = await userCredential.user.getIdTokenResult(true);
-        const hasAdminClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
+        const hasCustomClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
+        const hasAdminClaim = hasCustomClaim || isRootAdmin || isIdentifierAdmin(targetEmail, userCredential.user.uid);
 
         const verifiedUser: User = {
           id: userCredential.user.uid,
-          fullName: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'Patient',
+          fullName: userCredential.user.displayName || (hasAdminClaim ? 'Clinic Administrator' : 'Patient'),
           email: userCredential.user.email || '',
           isAdmin: hasAdminClaim,
         };
@@ -202,7 +320,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Explicit Demo Mode / Local Sandbox
     if (isDemoModeActive()) {
-      const demoAccount = DEMO_SANDBOX_ACCOUNTS[rawInput];
+      const demoAccount = DEMO_SANDBOX_ACCOUNTS[rawInput] || (isRootAdmin ? DEMO_SANDBOX_ACCOUNTS['03703513251'] : null);
       if (demoAccount) {
         const sandboxUser: User = {
           id: demoAccount.id,
@@ -217,11 +335,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isLoading: false,
           isAdmin: Boolean(demoAccount.isAdmin),
         });
-        return { success: true };
+        return { success: true, isAdmin: Boolean(demoAccount.isAdmin) };
       }
       return {
         success: false,
-        error: 'Demo Mode: Use patient.a@example.com, patient.b@example.com, or admin@aftabclinic.com for testing.',
+        error: 'Demo Mode: Use 03703513251 for Admin access.',
       };
     }
 
@@ -238,12 +356,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userCredential = await createUserWithEmailAndPassword(auth, targetEmail, cleanPassword);
         await updateProfile(userCredential.user, { displayName: fullName.trim() });
 
-        // Newly registered patients NEVER receive admin claims
+        const isUserAdmin = isIdentifierAdmin(rawInput);
         const verifiedUser: User = {
           id: userCredential.user.uid,
           fullName: fullName.trim(),
           email: userCredential.user.email || '',
-          isAdmin: false,
+          isAdmin: isUserAdmin,
         };
 
         localStorage.setItem('aftab_clinic_user', JSON.stringify(verifiedUser));
@@ -251,10 +369,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           user: verifiedUser,
           isAuthenticated: true,
           isLoading: false,
-          isAdmin: false,
+          isAdmin: isUserAdmin,
         });
 
-        return { success: true };
+        return { success: true, isAdmin: isUserAdmin };
       } catch (err: any) {
         let msg = err.message || 'Registration failed. Please check the details provided.';
         if (err.code === 'auth/email-already-in-use') {
@@ -301,7 +419,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async (): Promise<void> => {
-    // 1. Sign out of Firebase Auth
     if (isLiveFirebaseConfigured()) {
       try {
         await signOut(auth);
@@ -310,10 +427,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Purge all in-memory report blobs and session tokens
     purgeAllReportDataOnLogout();
-
-    // 3. Purge sensitive patient browser storage
     localStorage.removeItem('aftab_clinic_user');
     sessionStorage.clear();
 
@@ -323,6 +437,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading: false,
       isAdmin: false,
     });
+  };
+
+  /**
+   * Admin Privilege Delegation: Grant administrator access to any phone number or email
+   */
+  const grantAdminRole = async (targetIdentifier: string): Promise<{ success: boolean; error?: string }> => {
+    if (!authState.isAdmin) {
+      return { success: false, error: 'Unauthorized: Only an active Administrator can grant admin privileges.' };
+    }
+    const cleanId = targetIdentifier.trim();
+    if (!cleanId) {
+      return { success: false, error: 'Please enter a valid phone number or email address.' };
+    }
+    const targetEmail = resolveFirebaseEmail(cleanId);
+    const docId = 'adm_' + cleanId.replace(/[^a-zA-Z0-9]/g, '_');
+    const now = new Date().toISOString();
+
+    const record: AdminRecord = {
+      id: docId,
+      identifier: cleanId,
+      email: targetEmail,
+      grantedBy: authState.user?.fullName || authState.user?.email || 'Administrator',
+      createdAt: now,
+    };
+
+    try {
+      if (isLiveFirebaseConfigured()) {
+        await setDoc(doc(db, 'admins', docId), record);
+      }
+      const updated = [record, ...adminsList.filter((a) => a.id !== docId)];
+      setAdminsList(updated);
+      try {
+        localStorage.setItem('aftab_clinic_admins', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to grant admin privileges in Firestore.' };
+    }
+  };
+
+  /**
+   * Admin Privilege Delegation: Revoke administrator access
+   */
+  const revokeAdminRole = async (docId: string): Promise<{ success: boolean; error?: string }> => {
+    if (!authState.isAdmin) {
+      return { success: false, error: 'Unauthorized: Only an active Administrator can revoke admin privileges.' };
+    }
+    const target = adminsList.find((a) => a.id === docId);
+    if (
+      target &&
+      (target.identifier === '03703513251' ||
+        target.email.includes('03703513251') ||
+        ROOT_ADMIN_IDENTIFIERS.includes(target.email))
+    ) {
+      return { success: false, error: 'Access Denied: Cannot revoke privileges of the Primary Root Administrator (03703513251).' };
+    }
+
+    try {
+      if (isLiveFirebaseConfigured()) {
+        await deleteDoc(doc(db, 'admins', docId));
+      }
+      const updated = adminsList.filter((a) => a.id !== docId);
+      setAdminsList(updated);
+      try {
+        localStorage.setItem('aftab_clinic_admins', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to revoke admin privileges in Firestore.' };
+    }
   };
 
   const updateWhatsAppConfig = (newConfig: Partial<WhatsAppConfig>): boolean => {
@@ -358,6 +546,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateWhatsAppConfig,
         getAllRegisteredAccounts,
         isCloudConnected,
+        adminsList,
+        grantAdminRole,
+        revokeAdminRole,
       }}
     >
       {children}

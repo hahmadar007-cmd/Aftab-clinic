@@ -13,6 +13,7 @@ import {
   X,
   FileText,
   Shield,
+  ShieldCheck,
   Tag,
   MessageCircle,
   Save,
@@ -49,10 +50,23 @@ export const AdminDashboard: React.FC = () => {
     getPrivateReportPDF,
   } = useLabData();
 
-  const { whatsAppConfig, updateWhatsAppConfig, getAllRegisteredAccounts, user: currentUser } = useAuth();
+  const {
+    whatsAppConfig,
+    updateWhatsAppConfig,
+    getAllRegisteredAccounts,
+    user: currentUser,
+    adminsList,
+    grantAdminRole,
+    revokeAdminRole,
+  } = useAuth();
   const [waPhoneDisplay, setWaPhoneDisplay] = useState(whatsAppConfig.displayPhone);
   const [waPhoneDigits, setWaPhoneDigits] = useState(whatsAppConfig.phoneNumber);
   const [waSaveMsg, setWaSaveMsg] = useState(false);
+
+  // Administrator Privileges Delegation State
+  const [newAdminInput, setNewAdminInput] = useState('');
+  const [adminActionMsg, setAdminActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isGrantingAdmin, setIsGrantingAdmin] = useState(false);
 
   // Main Tabs
   const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'patients' | 'reports' | 'tests'>('overview');
@@ -544,6 +558,32 @@ export const AdminDashboard: React.FC = () => {
     const q = patientSearch.toLowerCase();
     return p.name.toLowerCase().includes(q) || p.contact.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
   });
+
+  const handleGrantAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminInput.trim()) return;
+    setIsGrantingAdmin(true);
+    setAdminActionMsg(null);
+    const res = await grantAdminRole(newAdminInput.trim());
+    if (res.success) {
+      setAdminActionMsg({ type: 'success', text: `Successfully granted Administrator privileges to "${newAdminInput.trim()}".` });
+      setNewAdminInput('');
+    } else {
+      setAdminActionMsg({ type: 'error', text: res.error || 'Failed to grant admin privileges.' });
+    }
+    setIsGrantingAdmin(false);
+  };
+
+  const handleRevokeAdmin = async (docId: string, identifier: string) => {
+    if (!window.confirm(`Revoke administrator privileges for "${identifier}"?`)) return;
+    setAdminActionMsg(null);
+    const res = await revokeAdminRole(docId);
+    if (res.success) {
+      setAdminActionMsg({ type: 'success', text: `Revoked Administrator privileges for "${identifier}".` });
+    } else {
+      setAdminActionMsg({ type: 'error', text: res.error || 'Failed to revoke privileges.' });
+    }
+  };
 
   // Filtered Reports Archive
   const filteredReportsList = reports.filter((r) => {
@@ -1124,6 +1164,103 @@ export const AdminDashboard: React.FC = () => {
                       onChange={(e) => setPatientSearch(e.target.value)}
                       style={{ padding: '0.4rem 0.75rem 0.4rem 2.25rem', fontSize: '0.8125rem' }}
                     />
+                  </div>
+                </div>
+
+                {/* Administrator Privileges Management Card */}
+                <div
+                  className="card"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid var(--border-light)',
+                    borderLeft: '4px solid var(--primary-blue)',
+                    padding: '1.25rem',
+                    marginBottom: '1.5rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <ShieldCheck size={20} color="var(--primary-blue)" />
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary-blue)' }}>
+                      Staff & Administrator Privileges Management
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
+                    Authorized administrators can grant or revoke admin dashboard and PDF publishing privileges to any mobile phone number or email address.
+                  </p>
+
+                  {adminActionMsg && (
+                    <div
+                      style={{
+                        padding: '0.625rem 0.875rem',
+                        borderRadius: '6px',
+                        fontSize: '0.8125rem',
+                        marginBottom: '1rem',
+                        backgroundColor: adminActionMsg.type === 'success' ? '#dcfce7' : '#fee2e2',
+                        color: adminActionMsg.type === 'success' ? '#15803d' : '#b91c1c',
+                      }}
+                    >
+                      {adminActionMsg.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleGrantAdmin} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                    <input
+                      type="text"
+                      placeholder="Enter mobile number (e.g. 03001234567) or email..."
+                      value={newAdminInput}
+                      onChange={(e) => setNewAdminInput(e.target.value)}
+                      style={{ flex: 1, minWidth: '220px', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderRadius: '6px', border: '1px solid var(--border-light)' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isGrantingAdmin || !newAdminInput.trim()}
+                      className="btn btn-primary"
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem' }}
+                    >
+                      {isGrantingAdmin ? 'Granting...' : '+ Grant Admin Access'}
+                    </button>
+                  </form>
+
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                      Current Authorized Administrators ({adminsList.length}):
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {adminsList.map((adm) => {
+                        const isRoot = adm.identifier === '03703513251' || adm.email.includes('03703513251');
+                        return (
+                          <div
+                            key={adm.id}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              padding: '0.35rem 0.65rem',
+                              backgroundColor: isRoot ? '#eff6ff' : '#f8fafc',
+                              border: `1px solid ${isRoot ? '#bfdbfe' : 'var(--border-light)'}`,
+                              borderRadius: '6px',
+                              fontSize: '0.8125rem',
+                            }}
+                          >
+                            <span style={{ fontWeight: 700, color: isRoot ? 'var(--primary-blue)' : 'var(--text-dark)' }}>
+                              {adm.identifier}
+                            </span>
+                            <span style={{ fontSize: '0.6875rem', color: isRoot ? 'var(--primary-blue)' : 'var(--text-muted)' }}>
+                              {isRoot ? '(Primary Owner)' : `(Added by ${adm.grantedBy})`}
+                            </span>
+                            {!isRoot && (
+                              <button
+                                onClick={() => handleRevokeAdmin(adm.id, adm.identifier)}
+                                style={{ background: 'none', border: 'none', color: 'var(--error-red)', cursor: 'pointer', fontSize: '0.75rem', padding: '0 0.2rem' }}
+                                title="Revoke Admin Access"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 

@@ -7,7 +7,16 @@ service firebase.storage {
     }
 
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.admin == true;
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email in [
+          'patient_03703513251@aftabclinic.com',
+          'admin_03703513251@aftabclinic.com',
+          '03703513251@aftabclinic.com',
+          'aftabclinictestzone@gmail.com'
+        ] ||
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+      );
     }
 
     // Prescription Document Uploads (Bound to User UID)
