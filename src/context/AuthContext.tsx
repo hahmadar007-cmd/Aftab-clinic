@@ -140,14 +140,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
+  const resolveFirebaseEmail = (input: string): string => {
+    const clean = input.trim().toLowerCase();
+    if (clean.includes('@')) {
+      return clean;
+    }
+    const digits = clean.replace(/[^0-9]/g, '');
+    if (digits.length >= 7) {
+      return `patient_${digits}@aftabclinic.com`;
+    }
+    return clean;
+  };
+
   const login = async (identifierInput: string, passwordInput: string): Promise<AuthResult> => {
     const rawInput = identifierInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
+    const targetEmail = resolveFirebaseEmail(rawInput);
 
     // 1. Live Firebase Cloud Authentication
     if (isLiveFirebaseConfigured()) {
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, rawInput, cleanPassword);
+        const userCredential = await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
         const tokenResult = await userCredential.user.getIdTokenResult(true);
         const hasAdminClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
 
@@ -168,9 +181,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return { success: true };
       } catch (err: any) {
-        let msg = 'Authentication failed. Please verify your email and password.';
+        let msg = err.message || 'Authentication failed. Please verify your credentials.';
         if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
           msg = 'Invalid credentials. Please verify your email/phone and password.';
+        } else if (err.code === 'auth/wrong-password') {
+          msg = 'Incorrect password. Please verify your password and try again.';
+        } else if (err.code === 'auth/invalid-email') {
+          msg = 'Please enter a valid email address or phone number.';
+        } else if (err.code === 'auth/operation-not-allowed') {
+          msg = 'Email/Password sign-in is disabled in Firebase Console. Go to Firebase Console > Authentication > Sign-in method and enable Email/Password.';
+        } else if (err.code === 'auth/unauthorized-domain') {
+          msg = 'Domain is not authorized in Firebase. Add aftab-clinic.vercel.app under Authentication > Settings > Authorized domains in Firebase Console.';
         } else if (err.code === 'auth/too-many-requests') {
           msg = 'Account temporarily locked due to multiple failed attempts. Please try again later.';
         }
@@ -209,10 +230,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (fullName: string, identifierInput: string, passwordInput: string): Promise<AuthResult> => {
     const rawInput = identifierInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
+    const targetEmail = resolveFirebaseEmail(rawInput);
 
     if (isLiveFirebaseConfigured()) {
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, rawInput, cleanPassword);
+        const userCredential = await createUserWithEmailAndPassword(auth, targetEmail, cleanPassword);
         await updateProfile(userCredential.user, { displayName: fullName.trim() });
 
         // Newly registered patients NEVER receive admin claims
@@ -233,11 +255,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return { success: true };
       } catch (err: any) {
-        let msg = 'Registration failed. Please check the details provided.';
+        let msg = err.message || 'Registration failed. Please check the details provided.';
         if (err.code === 'auth/email-already-in-use') {
-          msg = 'An account with this email address already exists. Please sign in instead.';
+          msg = 'An account with this email address or phone already exists. Please sign in instead.';
         } else if (err.code === 'auth/weak-password') {
           msg = 'Password is too weak. Please use at least 6 characters.';
+        } else if (err.code === 'auth/invalid-email') {
+          msg = 'Please enter a valid email address (e.g. name@example.com) or 10-digit phone number.';
+        } else if (err.code === 'auth/operation-not-allowed') {
+          msg = 'Email/Password sign-in is disabled in Firebase Console. Go to Firebase Console > Authentication > Sign-in method and enable Email/Password.';
+        } else if (err.code === 'auth/unauthorized-domain') {
+          msg = 'Domain is not authorized in Firebase. Add aftab-clinic.vercel.app under Authentication > Settings > Authorized domains in Firebase Console.';
         }
         return { success: false, error: msg };
       }
