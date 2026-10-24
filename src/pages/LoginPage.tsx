@@ -35,8 +35,11 @@ export const LoginPage: React.FC = () => {
     try {
       const result = await login(email, password);
       if (result.success) {
-        // Let AuthContext state propagate
-        navigate('/dashboard', { replace: true });
+        if (result.isAdmin) {
+          navigate('/admin', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       } else {
         setErrorMessage(result.error || 'Invalid credentials. Access denied.');
       }

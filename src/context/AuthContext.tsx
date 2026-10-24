@@ -179,7 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isAdmin: hasAdminClaim,
         });
 
-        return { success: true };
+        return { success: true, isAdmin: hasAdminClaim };
       } catch (err: any) {
         let msg = err.message || 'Authentication failed. Please verify your credentials.';
         if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
