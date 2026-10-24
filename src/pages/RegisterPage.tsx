@@ -14,8 +14,9 @@ export const RegisterPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -41,14 +42,21 @@ export const RegisterPage: React.FC = () => {
       return;
     }
 
-    const result = register(fullName, email, password);
-    if (result.success) {
-      setIsSuccess(true);
-      setTimeout(() => {
-        navigate('/login', { replace: true });
-      }, 1800);
-    } else {
-      setErrorMessage(result.error || 'Registration failed. Please try again.');
+    setIsSubmitting(true);
+    try {
+      const result = await register(fullName, email, password);
+      if (result.success) {
+        setIsSuccess(true);
+        setTimeout(() => {
+          navigate('/login', { replace: true });
+        }, 1800);
+      } else {
+        setErrorMessage(result.error || 'Registration failed. Please try again.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Registration failed.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -198,9 +206,10 @@ export const RegisterPage: React.FC = () => {
               <button
                 type="submit"
                 className="btn btn-primary"
-                style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', backgroundColor: 'var(--primary-green)' }}
+                disabled={isSubmitting}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', backgroundColor: 'var(--primary-green)', opacity: isSubmitting ? 0.7 : 1 }}
               >
-                <span>Create Account</span>
+                <span>{isSubmitting ? 'Creating Account...' : 'Create Account'}</span>
                 <ArrowRight size={18} />
               </button>
             </form>

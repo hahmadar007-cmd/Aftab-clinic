@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Authentication & Role Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Patient User Profiles
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      // Block privilege escalation: patients cannot set admin flags
+      allow create: if isOwner(userId)
+        && !('admin' in request.resource.data)
+        && !('isAdmin' in request.resource.data)
+        && !('role' in request.resource.data);
+      allow update: if (isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['admin', 'isAdmin', 'role']))
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Diagnostic Bookings
+    match /bookings/{bookingId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      
+      // Strict patient creation validation:
+      // - Must match authenticated UID
+      // - Status must be 'Pending' (cannot create as Completed or Partially Ready)
+      // - Payment status must be 'Unpaid' or 'Pending' (cannot forge Paid)
+      // - Only allowed fields permitted
+      // - Tests list must be non-empty and bounded
+      allow create: if isAdmin() || (
+        isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'Pending'
+        && (request.resource.data.paymentStatus == 'Unpaid' || request.resource.data.paymentStatus == 'Pending')
+        && request.resource.data.keys().hasOnly([
+          'id', 'patientName', 'phoneNumber', 'age', 'gender', 'collectionType',
+          'address', 'date', 'timeSlot', 'prescriptionUrl', 'tests', 'totalAmount',
+          'discountPercent', 'discountAmount', 'status', 'paymentStatus', 'userId',
+          'userEmail', 'createdAt'
+        ])
+        && request.resource.data.tests is list
+        && request.resource.data.tests.size() > 0
+        && request.resource.data.tests.size() <= 30
+      );
+
+      // Status updates, cancellations, and report associations restricted to Admin
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Diagnostic Reports (Confidential Medical Documents)
+    match /reports/{reportId} {
+      // Patients can ONLY read verified, PUBLISHED reports (status == 'ready') belonging to them.
+      // Draft (pending) or replaced reports are strictly blocked from patient access.
+      allow read: if isAdmin() || (
+        isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status == 'ready'
+      );
+
+      // Strictly admin-only creation, publication, and replacement
+      allow write: if isAdmin();
+    }
+
+    // Patient In-App Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      // Patients can only mark their own notification as read
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      // Creation and deletion strictly system/admin
+      allow create, delete: if isAdmin();
+    }
+
+    // Public Test Catalog & Health Packages (Read-only for public, write for admin)
+    match /tests/{testId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /packages/{packageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

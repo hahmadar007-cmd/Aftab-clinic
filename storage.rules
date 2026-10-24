@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Prescription Document Uploads (Bound to User UID)
+    match /prescriptions/{userId}/{fileName} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      // Validated upload: matching UID, max 10MB, allowed types (PDF, JPEG, PNG, WEBP)
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(jpeg|png|webp)');
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+    }
+
+    // Confidential Medical PDF Reports
+    // Storage access is strictly tied to the verified report owner and published status
+    match /reports/{reportFile} {
+      allow read: if isAdmin() || (
+        isAuthenticated()
+        && resource.metadata.userId == request.auth.uid
+        && resource.metadata.isPublished == 'true'
+      );
+      // Only authorized administrators can upload or replace diagnostic reports
+      allow write: if isAdmin();
+    }
+  }
+}

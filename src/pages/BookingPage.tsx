@@ -49,12 +49,23 @@ export const BookingPage: React.FC = () => {
     let rxCloudUrl = '';
 
     if (prescriptionFile) {
-      rxCloudUrl = await uploadPrescriptionCloud(prescriptionFile, tempBookingId);
+      if (!user?.id) {
+        setErrorMsg('Please sign in to securely upload diagnostic prescriptions.');
+        return;
+      }
+      try {
+        rxCloudUrl = await uploadPrescriptionCloud(prescriptionFile, user.id, tempBookingId);
+      } catch (uploadErr: any) {
+        setErrorMsg(uploadErr.message || 'Prescription upload failed. Please try again.');
+        return;
+      }
     }
 
     // Register booking in admin lab data & Firebase Firestore
     addBooking({
       id: tempBookingId,
+      userId: user?.id,
+      userEmail: user?.email,
       patientName: patientInfo.patientName,
       phoneNumber: patientInfo.phoneNumber,
       age: patientInfo.age + ' Yrs',
@@ -64,8 +75,8 @@ export const BookingPage: React.FC = () => {
       timeSlot: patientInfo.preferredTimeSlot,
       prescriptionUrl: rxCloudUrl,
       tests: cart.length > 0
-        ? cart.map((i) => ({ code: i.code, name: i.name, price: i.price }))
-        : [{ code: 'RX-REQ', name: prescriptionFile ? `Prescription File: ${prescriptionFile.name}` : 'Direct Booking / Inquiry', price: totalPrice }],
+        ? cart.map((i) => ({ code: i.code, name: i.name, price: i.price, reportStatus: 'pending' as const }))
+        : [{ code: 'RX-REQ', name: prescriptionFile ? `Prescription File: ${prescriptionFile.name}` : 'Direct Booking / Inquiry', price: totalPrice, reportStatus: 'pending' as const }],
       totalAmount: totalPrice,
     });
 

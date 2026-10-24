@@ -12,7 +12,9 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -29,15 +31,19 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const result = login(email, password);
-    if (result.success) {
-      if (email.toLowerCase().trim() === 'aftabclinictestzone@gmail.com') {
-        navigate('/admin', { replace: true });
-      } else {
+    setIsSubmitting(true);
+    try {
+      const result = await login(email, password);
+      if (result.success) {
+        // Let AuthContext state propagate
         navigate('/dashboard', { replace: true });
+      } else {
+        setErrorMessage(result.error || 'Invalid credentials. Access denied.');
       }
-    } else {
-      setErrorMessage(result.error || 'Invalid credentials. Access denied.');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Login failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -138,9 +144,10 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ width: '100%', padding: '0.75rem', fontSize: '1rem' }}
+              disabled={isSubmitting}
+              style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', opacity: isSubmitting ? 0.7 : 1 }}
             >
-              <span>Sign In</span>
+              <span>{isSubmitting ? 'Signing In...' : 'Sign In'}</span>
               <ArrowRight size={18} />
             </button>
           </form>

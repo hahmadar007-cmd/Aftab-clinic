@@ -1,49 +1,121 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FileText,
   MessageCircle,
-  ShieldCheck,
   Clock,
-  Award,
-  Sparkles,
-  Microscope,
-  PackageCheck,
   Search,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  ChevronRight,
+  ShieldCheck,
+  Award,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HEALTH_PACKAGES } from '../data/labData';
 import { Layout } from '../components/Layout';
 import { getWhatsAppUrl } from '../utils/whatsapp';
-
 import { useLabData } from '../context/LabDataContext';
 
 export const DashboardPage: React.FC = () => {
-  const { user, whatsAppConfig } = useAuth();
+  const { user, whatsAppConfig, isCloudConnected } = useAuth();
   const { bookings, reports } = useLabData();
+  const [showStandardsModal, setShowStandardsModal] = useState(false);
 
   const whatsappUrl = getWhatsAppUrl(
     whatsAppConfig.phoneNumber,
     'Hello Aftab Clinic, I am logged into the patient portal and would like to ask a question.'
   );
 
-  // Status Badge Helper
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  // Filter bookings for current logged-in patient (or all for admin preview)
+  const patientBookings = bookings.filter((b) => {
+    if (user?.isAdmin) return true;
+    if (!user) return false;
+    return (
+      b.userId === user.id ||
+      b.userEmail === user.email ||
+      b.phoneNumber === user.email ||
+      b.patientName.toLowerCase() === user.fullName.toLowerCase()
+    );
+  });
+
+  // Calculate ready reports for the patient
+  const patientReports = reports.filter((r) => {
+    if (user?.isAdmin) return r.status === 'ready';
+    if (!user) return false;
+    return (
+      r.status === 'ready' &&
+      (r.userId === user.id ||
+        (r.patientEmail && r.patientEmail.toLowerCase() === user.email?.toLowerCase()) ||
+        (r.patientPhone && r.patientPhone === user.email))
+    );
+  });
+
+  // Strict workflow state status helper - guarantees NO contradictory messages
+  const getDerivedStatus = (booking: typeof bookings[0]) => {
+    const readyTestsCount = booking.tests.filter((t) => t.reportStatus === 'ready').length;
+    const totalTestsCount = booking.tests.length;
+
+    switch (booking.status) {
       case 'Completed':
-        return { bg: '#dcfce7', color: '#15803d', label: '✅ Report Published & Ready', icon: 'CheckCircle' };
+        return {
+          bg: '#dcfce7',
+          color: '#15803d',
+          label: '✅ All Reports Ready',
+          message: 'All verified diagnostic reports are ready to view and download.',
+        };
+      case 'Partially Ready':
+        return {
+          bg: '#ffedd5',
+          color: '#c2410c',
+          label: `⚠️ Partial Results Ready (${readyTestsCount}/${totalTestsCount})`,
+          message: `Results ready for ${readyTestsCount} of ${totalTestsCount} tests. Remaining tests are actively in progress.`,
+        };
       case 'In Process':
-        return { bg: '#e0e7ff', color: '#3730a3', label: '🔬 Lab Testing In Process', icon: 'Clock' };
+        return {
+          bg: '#e0e7ff',
+          color: '#3730a3',
+          label: '🔬 Testing in Progress',
+          message: 'Diagnostic testing is actively running in the laboratory.',
+        };
       case 'Sample Collected':
-        return { bg: '#f3e8ff', color: '#6b21a8', label: '🩸 Sample Received at Lab', icon: 'Clock' };
+        return {
+          bg: '#f3e8ff',
+          color: '#6b21a8',
+          label: '🩸 Sample Received at Lab',
+          message: 'Sample received at laboratory. Accessioning complete.',
+        };
       case 'Confirmed':
-        return { bg: '#e0f2fe', color: '#0369a1', label: '📅 Booking Confirmed', icon: 'CheckCircle' };
+        return {
+          bg: '#e0f2fe',
+          color: '#0369a1',
+          label: '📅 Appointment Confirmed',
+          message: 'Your diagnostic appointment and phlebotomist slot have been confirmed.',
+        };
       case 'Action Required':
-        return { bg: '#fee2e2', color: '#b91c1c', label: '⚠️ Issue / Action Required', icon: 'AlertTriangle' };
+        return {
+          bg: '#fee2e2',
+          color: '#b91c1c',
+          label: '⚠️ Action Required',
+          message: 'Please review your booking details or contact the clinic.',
+        };
       case 'Cancelled':
-        return { bg: '#f1f5f9', color: '#475569', label: '❌ Cancelled', icon: 'X' };
+        return {
+          bg: '#f1f5f9',
+          color: '#475569',
+          label: '❌ Cancelled',
+          message: 'This appointment booking was cancelled.',
+        };
+      case 'Pending':
       default:
-        return { bg: '#fef3c7', color: '#b45309', label: '⏳ Pending Sample Collection', icon: 'Clock' };
+        return {
+          bg: '#fef3c7',
+          color: '#b45309',
+          label: '⏳ Awaiting Sample Collection',
+          message: 'Phlebotomist visit / clinic sample collection is pending.',
+        };
     }
   };
 
@@ -51,122 +123,229 @@ export const DashboardPage: React.FC = () => {
     <div className="app-container">
       <Layout>
         <main className="main-content">
-          <div
-            style={{
-              maxWidth: '1280px',
-              margin: '0 auto',
-              padding: '1rem',
-            }}
-          >
-            {/* Hero Welcome Banner */}
+          <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '1rem' }}>
+
+            {/* 1. Compact Patient Header Bar (Low Profile, No Decorative Clutter) */}
             <div
               className="fade-in"
               style={{
-                background: 'linear-gradient(135deg, #0056b3 0%, #003e80 50%, #00a859 100%)',
-                color: '#ffffff',
+                backgroundColor: '#ffffff',
                 borderRadius: 'var(--radius-lg)',
-                padding: '1.5rem 1.25rem',
-                boxShadow: 'var(--shadow-lg)',
-                marginBottom: '1.5rem',
-                position: 'relative',
-                overflow: 'hidden',
+                padding: '1rem 1.25rem',
+                boxShadow: 'var(--shadow-sm)',
+                border: '1px solid var(--border-light)',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0.75rem',
               }}
             >
-              <div style={{ maxWidth: '640px', position: 'relative', zIndex: 2 }}>
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                    backdropFilter: 'blur(4px)',
-                    padding: '0.25rem 0.75rem',
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: '0.8125rem',
-                    fontWeight: 600,
-                    marginBottom: '0.75rem',
-                  }}
-                >
-                  <Sparkles size={14} /> Diagnostic Patient Portal Active
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-dark)', margin: 0 }}>
+                    Welcome, {user?.fullName || 'Patient'}
+                  </h1>
+                  <span
+                    style={{
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      backgroundColor: isCloudConnected ? '#dcfce7' : '#fef3c7',
+                      color: isCloudConnected ? '#15803d' : '#b45309',
+                      padding: '0.15rem 0.5rem',
+                      borderRadius: 'var(--radius-full)',
+                    }}
+                  >
+                    {isCloudConnected ? '● Live Cloud Connected' : '● Demo Sandbox Mode'}
+                  </span>
                 </div>
-
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.5rem' }}>
-                  Welcome back, {user?.fullName || 'Valued Patient'}
-                </h1>
-                <p style={{ fontSize: '0.9375rem', color: '#e2e8f0', lineHeight: 1.5 }}>
-                  Explore 80+ diagnostic lab tests, official health packages, online report downloads, and 1-click WhatsApp sample collection booking.
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
+                  Patient Diagnostic Portal • Aftab Clinic & Diagnostic Laboratory
                 </p>
               </div>
 
-              {/* Decorative background shape */}
-              <div
-                className="hide-on-mobile"
-                style={{
-                  position: 'absolute',
-                  right: '-40px',
-                  bottom: '-40px',
-                  opacity: 0.15,
-                  pointerEvents: 'none',
-                }}
+              <button
+                onClick={() => setShowStandardsModal(true)}
+                className="btn btn-outline"
+                style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
               >
-                <Microscope size={280} color="#ffffff" />
-              </div>
+                <Award size={14} color="var(--primary-green)" />
+                <span>About Lab Standards</span>
+              </button>
             </div>
 
-            {/* LIVE BOOKINGS & REPORT STATUS TRACKER */}
+            {/* 2. Primary Actions: "Book a Test" & "My Reports" First */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '1rem',
+                marginBottom: '1.5rem',
+              }}
+            >
+              {/* Action 1: Book a Test */}
+              <Link
+                to="/tests"
+                className="card"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '1.25rem',
+                  textDecoration: 'none',
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid var(--primary-blue-light)',
+                  boxShadow: 'var(--shadow-sm)',
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div
+                    style={{
+                      backgroundColor: 'var(--primary-blue-light)',
+                      color: 'var(--primary-blue)',
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Search size={22} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-blue)', margin: '0 0 0.2rem 0' }}>
+                      Book a Diagnostic Test
+                    </h3>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Browse 80+ lab tests with transparent PKR rates
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={20} color="var(--primary-blue)" />
+              </Link>
+
+              {/* Action 2: My Reports */}
+              <Link
+                to="/reports"
+                className="card"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '1.25rem',
+                  textDecoration: 'none',
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid #bbf7d0',
+                  boxShadow: 'var(--shadow-sm)',
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div
+                    style={{
+                      backgroundColor: '#dcfce7',
+                      color: '#15803d',
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#15803d', margin: '0 0 0.2rem 0' }}>
+                        My Reports
+                      </h3>
+                      {patientReports.length > 0 && (
+                        <span style={{ fontSize: '0.6875rem', fontWeight: 700, backgroundColor: '#15803d', color: '#ffffff', padding: '0.1rem 0.45rem', borderRadius: '10px' }}>
+                          {patientReports.length} Ready
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                      View & download verified pathologist PDF results
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={20} color="#15803d" />
+              </Link>
+            </div>
+
+            {/* 3. My Bookings Section (Follows Immediately After Primary Actions) */}
             <div style={{ marginBottom: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FileText size={22} /> My Live Diagnostic Bookings & Report Status
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h2 style={{ fontSize: '1.125rem', color: 'var(--text-dark)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Clock size={18} color="var(--primary-blue)" />
+                  My Diagnostic Bookings ({patientBookings.length})
                 </h2>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                  Total Orders: <strong>{bookings.length}</strong>
-                </span>
+                <Link to="/book" style={{ fontSize: '0.8125rem', color: 'var(--primary-blue)', fontWeight: 600, textDecoration: 'none' }}>
+                  + New Booking
+                </Link>
               </div>
 
-              {bookings.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: '2rem', backgroundColor: '#fff' }}>
-                  <Clock size={36} color="var(--text-muted)" style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
-                  <p style={{ color: 'var(--text-dark)', fontWeight: 600, margin: 0 }}>No active lab bookings found.</p>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Book a test or health package to track sample collection and view signed reports online.</p>
+              {patientBookings.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: '2rem', backgroundColor: '#ffffff', border: '1px dashed var(--border-light)' }}>
+                  <Clock size={32} color="var(--text-muted)" style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
+                  <p style={{ color: 'var(--text-dark)', fontWeight: 600, margin: '0 0 0.25rem 0' }}>No active bookings found</p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
+                    Book a test to track appointment schedule and access signed medical reports online.
+                  </p>
+                  <Link to="/tests" className="btn btn-primary" style={{ fontSize: '0.8125rem', padding: '0.45rem 1rem' }}>
+                    Browse Test Catalog
+                  </Link>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {bookings.map((booking) => {
-                    const badge = getStatusBadge(booking.status);
-                    const matchingReport = reports.find((r) => r.bookingId === booking.id);
+                  {patientBookings.map((booking) => {
+                    const statusInfo = getDerivedStatus(booking);
+                    const matchingReports = reports.filter((r) => r.bookingId === booking.id && r.status === 'ready');
+                    const readyTestsCount = booking.tests.filter((t) => t.reportStatus === 'ready').length;
+                    const hasAnyReadyReport = readyTestsCount > 0 || matchingReports.length > 0;
+
                     return (
                       <div
                         key={booking.id}
                         className="card fade-in"
                         style={{
                           backgroundColor: '#ffffff',
-                          borderLeft: `5px solid ${badge.color}`,
-                          padding: '1.25rem',
+                          borderLeft: `4px solid ${statusInfo.color}`,
+                          padding: '1.125rem',
                           boxShadow: 'var(--shadow-sm)',
                         }}
                       >
-                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                        {/* Header Details */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.75rem' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--primary-blue)' }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--primary-blue)' }}>
                                 {booking.patientName}
                               </span>
                               <span style={{ fontSize: '0.75rem', fontWeight: 700, backgroundColor: 'var(--primary-blue-light)', color: 'var(--primary-blue)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
-                                Ref ID: {booking.id}
+                                Ref: {booking.id}
                               </span>
                               {booking.age && (
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, backgroundColor: '#f1f5f9', color: 'var(--text-body)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
-                                  Age: {booking.age} Yrs ({booking.gender || 'Patient'})
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  Age: {booking.age} ({booking.gender})
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-                              <span>📅 Date: <strong>{booking.date}</strong></span>
+                            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                              <span>📅 {booking.date}</span>
                               <span>•</span>
                               <span>🏥 {booking.collectionType}</span>
                               <span>•</span>
-                              <span style={{ color: 'var(--primary-blue)', fontWeight: 600 }}>⏰ Slot: {booking.timeSlot || 'Morning (08:00 AM - 12:00 PM)'}</span>
+                              <span>⏰ Slot: {booking.timeSlot || 'Morning'}</span>
                             </div>
                           </div>
 
@@ -174,68 +353,126 @@ export const DashboardPage: React.FC = () => {
                           <div style={{ textAlign: 'right' }}>
                             <span
                               style={{
-                                fontSize: '0.8125rem',
+                                fontSize: '0.75rem',
                                 fontWeight: 700,
-                                backgroundColor: badge.bg,
-                                color: badge.color,
-                                padding: '0.35rem 0.75rem',
+                                backgroundColor: statusInfo.bg,
+                                color: statusInfo.color,
+                                padding: '0.25rem 0.65rem',
                                 borderRadius: 'var(--radius-full)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.375rem',
+                                display: 'inline-block',
                               }}
                             >
-                              {badge.label}
+                              {statusInfo.label}
                             </span>
                           </div>
                         </div>
 
-                        {/* Ordered Tests List */}
-                        <div style={{ backgroundColor: 'var(--bg-slate)', borderRadius: 'var(--radius-md)', padding: '0.75rem', marginBottom: '1rem' }}>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.375rem' }}>
-                            DIAGNOSTIC TESTS ORDERED:
+                        {/* Derived Message - Single Source of Truth */}
+                        <div
+                          style={{
+                            fontSize: '0.8125rem',
+                            color: statusInfo.color,
+                            backgroundColor: statusInfo.bg,
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '6px',
+                            marginBottom: '0.75rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <Info size={14} style={{ flexShrink: 0 }} />
+                          <span>{statusInfo.message}</span>
+                        </div>
+
+                        {/* Ordered Tests & Individual Report Status */}
+                        <div style={{ backgroundColor: 'var(--bg-slate)', borderRadius: '6px', padding: '0.625rem', marginBottom: '0.75rem' }}>
+                          <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                            Ordered Tests ({readyTestsCount}/{booking.tests.length} Ready):
                           </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                            {booking.tests.map((test, idx) => (
-                              <span
-                                key={idx}
-                                style={{
-                                  fontSize: '0.8125rem',
-                                  fontWeight: 600,
-                                  backgroundColor: '#ffffff',
-                                  color: 'var(--text-dark)',
-                                  border: '1px solid var(--border-light)',
-                                  padding: '0.25rem 0.5rem',
-                                  borderRadius: '6px',
-                                }}
-                              >
-                                [{test.code}] {test.name} - Rs. {test.price.toLocaleString()}
-                              </span>
-                            ))}
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                            {booking.tests.map((test, idx) => {
+                              const isReady = test.reportStatus === 'ready';
+                              const matchingTestRep = matchingReports.find(
+                                (r) => r.testNames?.includes(test.name) || r.testName.includes(test.name)
+                              );
+                              const targetReportId = test.reportId || matchingTestRep?.reportId;
+
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '0.35rem 0.5rem',
+                                    backgroundColor: '#ffffff',
+                                    borderRadius: '4px',
+                                    fontSize: '0.8125rem',
+                                    flexWrap: 'wrap',
+                                    gap: '0.25rem',
+                                  }}
+                                >
+                                  <div>
+                                    <span style={{ fontWeight: 700, color: 'var(--primary-blue)', marginRight: '0.35rem' }}>
+                                      [{test.code}]
+                                    </span>
+                                    <span style={{ fontWeight: 600 }}>{test.name}</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '0.35rem' }}>
+                                      (Rs. {test.price.toLocaleString()})
+                                    </span>
+                                  </div>
+
+                                  <div>
+                                    {isReady || matchingTestRep ? (
+                                      <Link
+                                        to={`/reports?id=${targetReportId || booking.id}`}
+                                        style={{
+                                          fontSize: '0.6875rem',
+                                          fontWeight: 700,
+                                          backgroundColor: '#dcfce7',
+                                          color: '#15803d',
+                                          padding: '0.15rem 0.45rem',
+                                          borderRadius: '4px',
+                                          textDecoration: 'none',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.2rem',
+                                        }}
+                                      >
+                                        <FileText size={11} /> View Report
+                                      </Link>
+                                    ) : (
+                                      <span style={{ fontSize: '0.6875rem', color: '#b45309', backgroundColor: '#fef3c7', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                                        Result Pending
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 
-                        {/* Action Row */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
-                          <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-green)' }}>
-                            Total Bill: Rs. {booking.totalAmount.toLocaleString()} PKR ({booking.paymentStatus})
+                        {/* Separate Payment & Report Action Row */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', paddingTop: '0.25rem' }}>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-dark)' }}>
+                            <span style={{ fontWeight: 700 }}>Total: Rs. {booking.totalAmount.toLocaleString()} PKR</span>
+                            <span style={{ marginLeft: '0.5rem', color: booking.paymentStatus === 'Paid' ? '#15803d' : '#b45309', fontWeight: 600, fontSize: '0.75rem', backgroundColor: booking.paymentStatus === 'Paid' ? '#dcfce7' : '#fef3c7', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                              Payment: {booking.paymentStatus === 'Paid' ? 'Paid' : 'Unpaid (Due at Collection)'}
+                            </span>
                           </div>
 
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {booking.status === 'Completed' || matchingReport ? (
-                              <Link
-                                to={`/reports?id=${matchingReport?.reportId || booking.id}`}
-                                className="btn btn-primary"
-                                style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
-                              >
-                                <FileText size={16} /> View & Download Signed Report
-                              </Link>
-                            ) : (
-                              <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                <Clock size={15} /> Lab testing in progress. Signed report will appear here upon completion.
-                              </span>
-                            )}
-                          </div>
+                          {hasAnyReadyReport && (
+                            <Link
+                              to={`/reports?id=${matchingReports[0]?.reportId || booking.id}`}
+                              className="btn btn-primary"
+                              style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                            >
+                              <FileText size={14} /> View / Download Report
+                            </Link>
+                          )}
                         </div>
                       </div>
                     );
@@ -244,249 +481,69 @@ export const DashboardPage: React.FC = () => {
               )}
             </div>
 
-            {/* Quick Actions Grid */}
-            <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: 'var(--text-dark)' }}>
-              Quick Patient Actions
-            </h2>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '1rem',
-                marginBottom: '2rem',
-              }}
-            >
-              {/* Action 1: Browse Rates */}
-              <Link
-                to="/tests"
-                className="card"
+            {/* 4. Health Screening Packages (Moved Lower Down) */}
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h2 style={{ fontSize: '1.125rem', color: 'var(--text-dark)', margin: 0 }}>
+                  Preventive Health Screening Packages
+                </h2>
+                <Link to="/packages" style={{ fontSize: '0.8125rem', color: 'var(--primary-blue)', fontWeight: 600, textDecoration: 'none' }}>
+                  View All Packages →
+                </Link>
+              </div>
+
+              <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.875rem',
-                  textDecoration: 'none',
-                  borderColor: 'var(--primary-blue-light)',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                  gap: '1rem',
                 }}
               >
-                <div
-                  style={{
-                    backgroundColor: 'var(--primary-blue-light)',
-                    color: 'var(--primary-blue)',
-                    padding: '0.625rem',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  <Search size={22} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: '0.9375rem', color: 'var(--text-dark)', marginBottom: '0.25rem' }}>Search Test Rates</h3>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                    Lookup official PKR test rates & sample codes.
-                  </p>
-                </div>
-              </Link>
-
-              {/* Action 2: Health Packages */}
-              <Link
-                to="/packages"
-                className="card"
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.875rem',
-                  textDecoration: 'none',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'var(--primary-green-light)',
-                    color: 'var(--primary-green)',
-                    padding: '0.625rem',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  <PackageCheck size={22} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: '0.9375rem', color: 'var(--text-dark)', marginBottom: '0.25rem' }}>Health Packages</h3>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                    Screening packages starting from Rs. 1,999.
-                  </p>
-                </div>
-              </Link>
-
-              {/* Action 3: Online Reports */}
-              <Link
-                to="/reports"
-                className="card"
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.875rem',
-                  textDecoration: 'none',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: '#fef3c7',
-                    color: '#d97706',
-                    padding: '0.625rem',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  <FileText size={22} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: '0.9375rem', color: 'var(--text-dark)', marginBottom: '0.25rem' }}>Online Lab Reports</h3>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                    View & print signed pathologist result reports.
-                  </p>
-                </div>
-              </Link>
-
-              {/* Action 4: WhatsApp Direct */}
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="card"
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.875rem',
-                  textDecoration: 'none',
-                  backgroundColor: '#f0fdf4',
-                  borderColor: '#bbf7d0',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'var(--whatsapp-green)',
-                    color: '#ffffff',
-                    padding: '0.625rem',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  <MessageCircle size={22} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: '0.9375rem', color: '#166534', marginBottom: '0.25rem' }}>WhatsApp Inquiry</h3>
-                  <p style={{ fontSize: '0.8125rem', color: '#15803d' }}>
-                    Chat directly with our team ({whatsAppConfig.displayPhone}).
-                  </p>
-                </div>
-              </a>
-            </div>
-
-            {/* Featured Official Health Screening Packages */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.125rem', color: 'var(--text-dark)' }}>
-                Official Health Packages
-              </h2>
-              <Link to="/packages" style={{ fontSize: '0.8125rem', color: 'var(--primary-blue)', fontWeight: 600, textDecoration: 'none' }}>
-                View All →
-              </Link>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '1rem',
-                marginBottom: '2rem',
-              }}
-            >
-              {HEALTH_PACKAGES.slice(0, 3).map((pkg) => (
-                <div key={pkg.id} className="card" style={{ borderTop: '4px solid var(--primary-green)' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary-green)', backgroundColor: 'var(--primary-green-light)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                    {pkg.code}
-                  </span>
-                  <h3 style={{ fontSize: '1.0625rem', color: 'var(--primary-blue)', margin: '0.5rem 0 0.25rem 0' }}>
-                    {pkg.name}
-                  </h3>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary-blue)', marginBottom: '0.75rem' }}>
-                    Rs. {pkg.price.toLocaleString()} <span style={{ fontSize: '0.8125rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>Rs. {pkg.regularPrice.toLocaleString()}</span>
+                {HEALTH_PACKAGES.slice(0, 3).map((pkg) => (
+                  <div key={pkg.id} className="card" style={{ borderTop: '3px solid var(--primary-green)', padding: '1rem' }}>
+                    <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--primary-green)', backgroundColor: 'var(--primary-green-light)', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                      {pkg.code}
+                    </span>
+                    <h3 style={{ fontSize: '0.9375rem', color: 'var(--primary-blue)', margin: '0.35rem 0 0.25rem 0' }}>
+                      {pkg.name}
+                    </h3>
+                    <div style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '0.5rem' }}>
+                      Rs. {pkg.price.toLocaleString()}{' '}
+                      <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>
+                        Rs. {pkg.regularPrice.toLocaleString()}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                      Includes {pkg.testsIncluded.length} key diagnostic tests.
+                    </p>
+                    <Link to="/packages" className="btn btn-outline" style={{ width: '100%', fontSize: '0.75rem', padding: '0.35rem' }}>
+                      View Details
+                    </Link>
                   </div>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                    Includes {pkg.testsIncluded.length} key tests ({pkg.testsIncluded.slice(0, 3).join(', ')}...)
-                  </p>
-                  <Link to="/packages" className="btn btn-outline" style={{ width: '100%', fontSize: '0.8125rem' }}>
-                    View Details
-                  </Link>
-                </div>
-              ))}
-            </div>
-
-            {/* Quality & Standards Section */}
-            <div className="card" style={{ marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '1.125rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Award size={20} color="var(--primary-green)" />
-                Diagnostic Quality & Laboratory Standards
-              </h2>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
-                  <ShieldCheck size={18} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <h4 style={{ fontSize: '0.875rem', marginBottom: '0.25rem' }}>Automated Precision</h4>
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>High-throughput clinical analyzers for rapid result accuracy.</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
-                  <ShieldCheck size={18} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <h4 style={{ fontSize: '0.875rem', marginBottom: '0.25rem' }}>Pathologist Verified</h4>
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>All diagnostic reports are reviewed and electronically signed by senior FCPS pathologists.</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
-                  <ShieldCheck size={18} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <h4 style={{ fontSize: '0.875rem', marginBottom: '0.25rem' }}>ISO Standards</h4>
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Internal and external proficiency quality assurance controls.</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Clinic Info & Contact Banner */}
+            {/* Direct Support & Operating Hours */}
             <div
               className="card mobile-stack"
               style={{
                 backgroundColor: '#ffffff',
-                borderLeft: '4px solid var(--primary-blue)',
+                borderLeft: '4px solid var(--whatsapp-green)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '1rem',
-                padding: '1.25rem',
+                padding: '1rem 1.25rem',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flex: 1 }}>
-                <div
-                  style={{
-                    backgroundColor: 'var(--primary-blue-light)',
-                    padding: '0.75rem',
-                    borderRadius: 'var(--radius-full)',
-                    color: 'var(--primary-blue)',
-                    flexShrink: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Clock size={22} style={{ flexShrink: 0 }} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1rem', color: 'var(--text-dark)', marginBottom: '0.25rem' }}>
-                    Laboratory Operating Hours
-                  </h3>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                    Mon – Sat: 08:00 AM – 10:00 PM | Sun: 09:00 AM – 04:00 PM
-                  </p>
-                </div>
+              <div>
+                <h3 style={{ fontSize: '0.9375rem', color: 'var(--text-dark)', margin: '0 0 0.2rem 0' }}>
+                  Laboratory Sample Collection & Support
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Mon – Sat: 08:00 AM – 10:00 PM | Sun: 09:00 AM – 04:00 PM
+                </p>
               </div>
 
               <a
@@ -494,12 +551,97 @@ export const DashboardPage: React.FC = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-whatsapp"
-                style={{ padding: '0.625rem 1rem', flexShrink: 0, width: 'fit-content' }}
+                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
               >
-                <MessageCircle size={18} style={{ flexShrink: 0 }} />
-                <span>WhatsApp Contact</span>
+                <MessageCircle size={16} />
+                <span>WhatsApp Helpline</span>
               </a>
             </div>
+
+            {/* Standards & Accreditation Modal (Moved from Main Page Flow) */}
+            {showStandardsModal && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  backdropFilter: 'blur(3px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '1rem',
+                  zIndex: 9999,
+                }}
+              >
+                <div
+                  className="card fade-in"
+                  style={{
+                    maxWidth: '520px',
+                    width: '100%',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '12px',
+                    padding: '1.5rem',
+                    boxShadow: 'var(--shadow-lg)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Award size={22} color="var(--primary-green)" />
+                      <h3 style={{ margin: 0, fontSize: '1.125rem', color: 'var(--primary-blue)' }}>
+                        Laboratory Quality Standards
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setShowStandardsModal(false)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem' }}
+                    >
+                      <X size={20} color="var(--text-muted)" />
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
+                      <ShieldCheck size={20} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <div>
+                        <h4 style={{ fontSize: '0.875rem', margin: '0 0 0.2rem 0' }}>Automated Clinical Precision</h4>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                          High-throughput clinical chemistry and hematology analyzers for reliable calibration and minimal turnaround time.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
+                      <CheckCircle size={20} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <div>
+                        <h4 style={{ fontSize: '0.875rem', margin: '0 0 0.2rem 0' }}>Consultant Pathologist Verification</h4>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                          All diagnostic result values are signed and approved by senior FCPS consultant pathologists prior to delivery.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
+                      <AlertTriangle size={20} color="var(--primary-green)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <div>
+                        <h4 style={{ fontSize: '0.875rem', margin: '0 0 0.2rem 0' }}>Proficiency Quality Controls</h4>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                          Daily two-level internal quality control (IQC) and external quality assessment program compliance.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setShowStandardsModal(false)}
+                    className="btn btn-primary"
+                    style={{ width: '100%', fontSize: '0.8125rem' }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         </main>
       </Layout>

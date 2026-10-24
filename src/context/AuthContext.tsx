@@ -1,47 +1,40 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+} from 'firebase/auth';
 import type { User, AuthState, WhatsAppConfig } from '../types';
+import { auth, isLiveFirebaseConfigured, isDemoModeActive } from '../config/firebase';
 import { cleanWhatsAppNumber } from '../utils/whatsapp';
+import { purgeAllReportDataOnLogout } from '../utils/reportSecurity';
 
 export interface AuthResult {
   success: boolean;
   error?: string;
 }
 
-interface RegisteredAccount {
+export interface RegisteredAccount {
   id: string;
   fullName: string;
   emailOrPhone: string;
   normalizedKey: string;
-  passwordHash: string;
+  passwordHash?: string;
+  createdAt?: string;
+  isAdmin?: boolean;
 }
 
 interface AuthContextType extends AuthState {
-  login: (identifier: string, pass: string) => AuthResult;
-  register: (fullName: string, identifier: string, pass: string) => AuthResult;
-  logout: () => void;
+  login: (identifier: string, pass: string) => Promise<AuthResult>;
+  register: (fullName: string, identifier: string, pass: string) => Promise<AuthResult>;
+  logout: () => Promise<void>;
   whatsAppConfig: WhatsAppConfig;
   updateWhatsAppConfig: (config: Partial<WhatsAppConfig>) => void;
+  getAllRegisteredAccounts: () => RegisteredAccount[];
+  isCloudConnected: boolean;
 }
-
-const ADMIN_EMAIL = 'aftabclinictestzone@gmail.com';
-const ADMIN_PASSWORD = 'tayyab__666';
-
-const normalizeIdentifier = (input: string): string => {
-  const trimmed = input.trim();
-  if (trimmed.includes('@')) {
-    return trimmed.toLowerCase();
-  }
-  return cleanWhatsAppNumber(trimmed);
-};
-
-const getRegisteredUsers = (): Record<string, RegisteredAccount> => {
-  try {
-    const raw = localStorage.getItem('aftab_clinic_registered_users');
-    return raw ? JSON.parse(raw) : {};
-  } catch (err) {
-    return {};
-  }
-};
 
 const DEFAULT_WHATSAPP: WhatsAppConfig = {
   phoneNumber: '923001234567',
@@ -49,119 +42,252 @@ const DEFAULT_WHATSAPP: WhatsAppConfig = {
   defaultMessage: 'Hello Aftab Clinic, I would like to inquire about laboratory diagnostic testing services.',
 };
 
+// Demo sandbox accounts strictly for offline / local testing
+const DEMO_SANDBOX_ACCOUNTS: Record<string, RegisteredAccount> = {
+  'patient.a@example.com': {
+    id: 'usr_patient_a',
+    fullName: 'Ali Khan (Patient A)',
+    emailOrPhone: 'patient.a@example.com',
+    normalizedKey: 'patient.a@example.com',
+    isAdmin: false,
+    createdAt: '2026-10-15',
+  },
+  'patient.b@example.com': {
+    id: 'usr_patient_b',
+    fullName: 'Bilal Ahmed (Patient B)',
+    emailOrPhone: 'patient.b@example.com',
+    normalizedKey: 'patient.b@example.com',
+    isAdmin: false,
+    createdAt: '2026-10-18',
+  },
+  'admin@aftabclinic.com': {
+    id: 'admin_master',
+    fullName: 'Lab Administrator',
+    emailOrPhone: 'admin@aftabclinic.com',
+    normalizedKey: 'admin@aftabclinic.com',
+    isAdmin: true,
+    createdAt: '2026-10-01',
+  },
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>(() => {
-    const savedUser = localStorage.getItem('aftab_clinic_user');
-    const user = savedUser ? JSON.parse(savedUser) : null;
-    return {
-      user,
-      isAuthenticated: !!savedUser,
-      isLoading: false,
-      isAdmin: user?.isAdmin || false,
-    };
+    try {
+      const savedUser = localStorage.getItem('aftab_clinic_user');
+      const user = savedUser ? JSON.parse(savedUser) : null;
+      return {
+        user,
+        isAuthenticated: !!savedUser,
+        isLoading: true,
+        isAdmin: user?.isAdmin || false,
+      };
+    } catch {
+      return { user: null, isAuthenticated: false, isLoading: true, isAdmin: false };
+    }
   });
 
   const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppConfig>(() => {
-    const savedWA = localStorage.getItem('aftab_clinic_wa');
-    return savedWA ? JSON.parse(savedWA) : DEFAULT_WHATSAPP;
+    try {
+      const savedWA = localStorage.getItem('aftab_clinic_wa');
+      return savedWA ? JSON.parse(savedWA) : DEFAULT_WHATSAPP;
+    } catch {
+      return DEFAULT_WHATSAPP;
+    }
   });
 
-  const login = (identifierInput: string, passwordInput: string): AuthResult => {
-    const rawInput = identifierInput.trim();
-    const cleanPassword = passwordInput.trim();
-    const normalizedKey = normalizeIdentifier(rawInput);
+  const isCloudConnected = isLiveFirebaseConfigured();
 
-    // Check if admin email
-    if (rawInput.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-      if (cleanPassword === ADMIN_PASSWORD) {
-        const adminUser: User = {
-          id: 'admin_sys',
-          fullName: 'Administrator',
-          email: ADMIN_EMAIL,
-          isAdmin: true,
+  // Listen to Firebase Auth state changes
+  useEffect(() => {
+    if (!isLiveFirebaseConfigured()) {
+      setAuthState((prev) => ({ ...prev, isLoading: false }));
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Fetch token result with forced refresh to verify server custom claims
+          const tokenResult = await firebaseUser.getIdTokenResult(true);
+          const hasAdminClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
+
+          const verifiedUser: User = {
+            id: firebaseUser.uid,
+            fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Patient',
+            email: firebaseUser.email || '',
+            isAdmin: hasAdminClaim,
+          };
+
+          localStorage.setItem('aftab_clinic_user', JSON.stringify(verifiedUser));
+          setAuthState({
+            user: verifiedUser,
+            isAuthenticated: true,
+            isLoading: false,
+            isAdmin: hasAdminClaim,
+          });
+        } catch (err) {
+          console.error('Error fetching auth token claims:', err);
+          setAuthState({ user: null, isAuthenticated: false, isLoading: false, isAdmin: false });
+        }
+      } else {
+        localStorage.removeItem('aftab_clinic_user');
+        setAuthState({ user: null, isAuthenticated: false, isLoading: false, isAdmin: false });
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const login = async (identifierInput: string, passwordInput: string): Promise<AuthResult> => {
+    const rawInput = identifierInput.trim().toLowerCase();
+    const cleanPassword = passwordInput.trim();
+
+    // 1. Live Firebase Cloud Authentication
+    if (isLiveFirebaseConfigured()) {
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, rawInput, cleanPassword);
+        const tokenResult = await userCredential.user.getIdTokenResult(true);
+        const hasAdminClaim = Boolean(tokenResult.claims && tokenResult.claims.admin === true);
+
+        const verifiedUser: User = {
+          id: userCredential.user.uid,
+          fullName: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'Patient',
+          email: userCredential.user.email || '',
+          isAdmin: hasAdminClaim,
         };
-        localStorage.setItem('aftab_clinic_user', JSON.stringify(adminUser));
+
+        localStorage.setItem('aftab_clinic_user', JSON.stringify(verifiedUser));
         setAuthState({
-          user: adminUser,
+          user: verifiedUser,
           isAuthenticated: true,
           isLoading: false,
-          isAdmin: true,
+          isAdmin: hasAdminClaim,
         });
+
         return { success: true };
-      } else {
-        return { success: false, error: 'Invalid Administrator password. Please check your credentials.' };
+      } catch (err: any) {
+        let msg = 'Authentication failed. Please verify your email and password.';
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+          msg = 'Invalid credentials. Please verify your email/phone and password.';
+        } else if (err.code === 'auth/too-many-requests') {
+          msg = 'Account temporarily locked due to multiple failed attempts. Please try again later.';
+        }
+        return { success: false, error: msg };
       }
     }
 
-    // Check regular patient authentication
-    const usersMap = getRegisteredUsers();
-    const account = usersMap[normalizedKey] || usersMap[rawInput.toLowerCase()];
-
-    if (!account) {
+    // 2. Explicit Demo Mode / Local Sandbox
+    if (isDemoModeActive()) {
+      const demoAccount = DEMO_SANDBOX_ACCOUNTS[rawInput];
+      if (demoAccount) {
+        const sandboxUser: User = {
+          id: demoAccount.id,
+          fullName: demoAccount.fullName,
+          email: demoAccount.emailOrPhone,
+          isAdmin: Boolean(demoAccount.isAdmin),
+        };
+        localStorage.setItem('aftab_clinic_user', JSON.stringify(sandboxUser));
+        setAuthState({
+          user: sandboxUser,
+          isAuthenticated: true,
+          isLoading: false,
+          isAdmin: Boolean(demoAccount.isAdmin),
+        });
+        return { success: true };
+      }
       return {
         success: false,
-        error: 'No account registered with this email or phone number. Please click "Register here" to create an account.',
+        error: 'Demo Mode: Use patient.a@example.com, patient.b@example.com, or admin@aftabclinic.com for testing.',
       };
     }
 
-    if (account.passwordHash !== cleanPassword) {
-      return { success: false, error: 'Incorrect password. Please verify your password and try again.' };
-    }
-
-    const patientUser: User = {
-      id: account.id,
-      fullName: account.fullName,
-      email: account.emailOrPhone,
-      isAdmin: false,
-    };
-
-    localStorage.setItem('aftab_clinic_user', JSON.stringify(patientUser));
-    setAuthState({
-      user: patientUser,
-      isAuthenticated: true,
-      isLoading: false,
-      isAdmin: false,
-    });
-
-    return { success: true };
+    return { success: false, error: 'Firebase Cloud services are not configured for authentication.' };
   };
 
-  const register = (fullName: string, identifierInput: string, passwordInput: string): AuthResult => {
-    const rawInput = identifierInput.trim();
+  const register = async (fullName: string, identifierInput: string, passwordInput: string): Promise<AuthResult> => {
+    const rawInput = identifierInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
-    const normalizedKey = normalizeIdentifier(rawInput);
 
-    if (rawInput.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-      return { success: false, error: 'This email address is reserved for Administrator access.' };
+    if (isLiveFirebaseConfigured()) {
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, rawInput, cleanPassword);
+        await updateProfile(userCredential.user, { displayName: fullName.trim() });
+
+        // Newly registered patients NEVER receive admin claims
+        const verifiedUser: User = {
+          id: userCredential.user.uid,
+          fullName: fullName.trim(),
+          email: userCredential.user.email || '',
+          isAdmin: false,
+        };
+
+        localStorage.setItem('aftab_clinic_user', JSON.stringify(verifiedUser));
+        setAuthState({
+          user: verifiedUser,
+          isAuthenticated: true,
+          isLoading: false,
+          isAdmin: false,
+        });
+
+        return { success: true };
+      } catch (err: any) {
+        let msg = 'Registration failed. Please check the details provided.';
+        if (err.code === 'auth/email-already-in-use') {
+          msg = 'An account with this email address already exists. Please sign in instead.';
+        } else if (err.code === 'auth/weak-password') {
+          msg = 'Password is too weak. Please use at least 6 characters.';
+        }
+        return { success: false, error: msg };
+      }
     }
 
-    const usersMap = getRegisteredUsers();
-    if (usersMap[normalizedKey] || usersMap[rawInput.toLowerCase()]) {
-      return { success: false, error: 'An account with this email address or phone number already exists. Please sign in instead.' };
+    if (isDemoModeActive()) {
+      const newUid = 'usr_' + Date.now();
+      const newUser: User = {
+        id: newUid,
+        fullName: fullName.trim(),
+        email: rawInput,
+        isAdmin: false,
+      };
+      DEMO_SANDBOX_ACCOUNTS[rawInput] = {
+        id: newUid,
+        fullName: fullName.trim(),
+        emailOrPhone: rawInput,
+        normalizedKey: rawInput,
+        isAdmin: false,
+      };
+      localStorage.setItem('aftab_clinic_user', JSON.stringify(newUser));
+      setAuthState({
+        user: newUser,
+        isAuthenticated: true,
+        isLoading: false,
+        isAdmin: false,
+      });
+      return { success: true };
     }
 
-    const newAccount: RegisteredAccount = {
-      id: 'usr_' + Date.now(),
-      fullName: fullName.trim(),
-      emailOrPhone: rawInput,
-      normalizedKey,
-      passwordHash: cleanPassword,
-    };
-
-    usersMap[normalizedKey] = newAccount;
-    if (rawInput.toLowerCase() !== normalizedKey) {
-      usersMap[rawInput.toLowerCase()] = newAccount;
-    }
-
-    localStorage.setItem('aftab_clinic_registered_users', JSON.stringify(usersMap));
-
-    return { success: true };
+    return { success: false, error: 'Cloud authentication is not configured.' };
   };
 
-  const logout = () => {
+  const logout = async (): Promise<void> => {
+    // 1. Sign out of Firebase Auth
+    if (isLiveFirebaseConfigured()) {
+      try {
+        await signOut(auth);
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Purge all in-memory report blobs and session tokens
+    purgeAllReportDataOnLogout();
+
+    // 3. Purge sensitive patient browser storage
     localStorage.removeItem('aftab_clinic_user');
+    sessionStorage.clear();
+
     setAuthState({
       user: null,
       isAuthenticated: false,
@@ -172,7 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateWhatsAppConfig = (newConfig: Partial<WhatsAppConfig>): boolean => {
     if (!authState.isAdmin) {
-      console.warn('Unauthorized attempt: Only Admin can change WhatsApp configuration.');
+      console.warn('Unauthorized attempt: Only verified Admin can change WhatsApp configuration.');
       return false;
     }
     const updated = { ...whatsAppConfig, ...newConfig };
@@ -180,8 +306,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated.phoneNumber = cleanWhatsAppNumber(updated.phoneNumber);
     }
     setWhatsAppConfig(updated);
-    localStorage.setItem('aftab_clinic_wa', JSON.stringify(updated));
+    try {
+      localStorage.setItem('aftab_clinic_wa', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
     return true;
+  };
+
+  const getAllRegisteredAccounts = (): RegisteredAccount[] => {
+    return Object.values(DEMO_SANDBOX_ACCOUNTS);
   };
 
   return (
@@ -193,6 +327,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         whatsAppConfig,
         updateWhatsAppConfig,
+        getAllRegisteredAccounts,
+        isCloudConnected,
       }}
     >
       {children}

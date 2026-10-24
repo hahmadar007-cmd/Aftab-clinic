@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import {
   ShoppingBag,
   TrendingUp,
-  Calendar,
   CheckCircle,
   Clock,
   Edit,
@@ -17,19 +16,27 @@ import {
   Tag,
   MessageCircle,
   Save,
+  Upload,
+  Eye,
+  AlertTriangle,
+  RefreshCw,
+  Lock,
+  Download,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useLabData } from '../context/LabDataContext';
 import { useAuth } from '../context/AuthContext';
-import type { BookingRecord } from '../context/LabDataContext';
-import { STANDARD_MEDICAL_PARAMETERS, type LabTest } from '../data/labData';
+import type { BookingRecord, LabReportRecord } from '../context/LabDataContext';
+import type { LabTest } from '../data/labData';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeDigitsOnly } from '../utils/validation';
 import { getWhatsAppUrl } from '../utils/whatsapp';
+import { createAuthorizedBlobUrl } from '../utils/reportSecurity';
 
 export const AdminDashboard: React.FC = () => {
   const {
     tests,
     bookings,
+    reports,
     addTest,
     updateTest,
     deleteTest,
@@ -38,18 +45,27 @@ export const AdminDashboard: React.FC = () => {
     updateBookingDiscount,
     deleteBooking,
     addReport,
+    uploadAndDeliverReport,
+    getPrivateReportPDF,
   } = useLabData();
 
-  const { whatsAppConfig, updateWhatsAppConfig } = useAuth();
+  const { whatsAppConfig, updateWhatsAppConfig, getAllRegisteredAccounts, user: currentUser } = useAuth();
   const [waPhoneDisplay, setWaPhoneDisplay] = useState(whatsAppConfig.displayPhone);
   const [waPhoneDigits, setWaPhoneDigits] = useState(whatsAppConfig.phoneNumber);
   const [waSaveMsg, setWaSaveMsg] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'tests' | 'reports'>('overview');
+  // Main Tabs
+  const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'patients' | 'reports' | 'tests'>('overview');
 
   // Search & Filter state
+  const [bookingFilter, setBookingFilter] = useState<
+    'All' | 'Awaiting Reports' | 'Pending' | 'Sample Collected' | 'In Process' | 'Completed' | 'Cancelled'
+  >('All');
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [reportSearch, setReportSearch] = useState('');
+  const [reportStatusFilter, setReportStatusFilter] = useState<'All' | 'ready' | 'replaced'>('All');
   const [testSearch, setTestSearch] = useState('');
-  const [bookingFilter, setBookingFilter] = useState<'All' | 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled'>('All');
 
   // Modals state
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
@@ -62,6 +78,31 @@ export const AdminDashboard: React.FC = () => {
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedReportBooking, setSelectedReportBooking] = useState<BookingRecord | null>(null);
+
+  // ----------------------------------------------------
+  // "UPLOAD REPORT" MODAL STATE
+  // ----------------------------------------------------
+  const [isUploadReportModalOpen, setIsUploadReportModalOpen] = useState(false);
+  const [targetBookingForUpload, setTargetBookingForUpload] = useState<BookingRecord | null>(null);
+  const [selectedTestNamesForReport, setSelectedTestNamesForReport] = useState<string[]>([]);
+  const [selectedPDFFile, setSelectedPDFFile] = useState<File | null>(null);
+  const [selectedPDFDataUrl, setSelectedPDFDataUrl] = useState<string>('');
+  const [pdfUploadError, setPdfUploadError] = useState<string>('');
+  const [patientConfirmed, setPatientConfirmed] = useState(false);
+  const [isReplacingReport, setIsReplacingReport] = useState(false);
+  const [replacementConfirmed, setReplacementConfirmed] = useState(false);
+  const [replacementReason, setReplacementReason] = useState('');
+  const [existingReportToReplace, setExistingReportToReplace] = useState<LabReportRecord | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccessAlert, setUploadSuccessAlert] = useState<{ title: string; detail: string } | null>(null);
+
+  // ----------------------------------------------------
+  // ADMIN REPORT PREVIEW MODAL STATE
+  // ----------------------------------------------------
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewReportRecord, setPreviewReportRecord] = useState<LabReportRecord | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewRevokeFn, setPreviewRevokeFn] = useState<(() => void) | null>(null);
 
   // Test Modal Form State
   const [testForm, setTestForm] = useState({
@@ -84,7 +125,7 @@ export const AdminDashboard: React.FC = () => {
     totalAmount: 1000,
   });
 
-  // Dynamic Report Form Parameter Row
+  // Dynamic Report Form Parameter Row (Manual editor)
   interface ReportParamRow {
     parameter: string;
     value: string;
@@ -108,10 +149,214 @@ export const AdminDashboard: React.FC = () => {
   // Calculate Statistics
   const totalBookingsCount = bookings.length;
   const pendingCount = bookings.filter((b) => b.status === 'Pending').length;
+  const inProcessCount = bookings.filter((b) => b.status === 'In Process' || b.status === 'Sample Collected').length;
   const completedCount = bookings.filter((b) => b.status === 'Completed').length;
+  const awaitingReportsCount = bookings.filter((b) => {
+    if (b.status === 'Completed' || b.status === 'Cancelled') return false;
+    return b.tests.some((t) => t.reportStatus !== 'ready');
+  }).length;
   const totalRevenue = bookings.reduce((sum, b) => (b.paymentStatus === 'Paid' ? sum + b.totalAmount : sum), 0);
 
-  // Test Form Handlers
+  // ----------------------------------------------------
+  // "UPLOAD REPORT" ACTION HANDLERS
+  // ----------------------------------------------------
+  const handleOpenUploadReportModal = (booking: BookingRecord, initialTestName?: string) => {
+    setTargetBookingForUpload(booking);
+    setPdfUploadError('');
+    setSelectedPDFFile(null);
+    setSelectedPDFDataUrl('');
+    setPatientConfirmed(false);
+    setReplacementConfirmed(false);
+    setReplacementReason('');
+    setUploadSuccessAlert(null);
+
+    // Initial test selection: either the specific clicked test, or all tests in the booking
+    if (initialTestName) {
+      setSelectedTestNamesForReport([initialTestName]);
+    } else {
+      setSelectedTestNamesForReport(booking.tests.map((t) => t.name));
+    }
+
+    // Check if any report already exists for this booking or selected test
+    const existing = reports.find(
+      (r) =>
+        r.bookingId === booking.id &&
+        r.status === 'ready' &&
+        (!initialTestName || r.testNames?.includes(initialTestName) || r.testName.includes(initialTestName))
+    );
+
+    if (existing) {
+      setIsReplacingReport(true);
+      setExistingReportToReplace(existing);
+    } else {
+      setIsReplacingReport(false);
+      setExistingReportToReplace(null);
+    }
+
+    setIsUploadReportModalOpen(true);
+  };
+
+  const handleTestSelectionChange = (testName: string) => {
+    let updated: string[];
+    if (selectedTestNamesForReport.includes(testName)) {
+      updated = selectedTestNamesForReport.filter((t) => t !== testName);
+    } else {
+      updated = [...selectedTestNamesForReport, testName];
+    }
+    setSelectedTestNamesForReport(updated);
+
+    // Re-check replacement status for newly selected tests
+    if (targetBookingForUpload) {
+      const existing = reports.find(
+        (r) =>
+          r.bookingId === targetBookingForUpload.id &&
+          r.status === 'ready' &&
+          updated.some((name) => r.testNames?.includes(name) || r.testName.includes(name))
+      );
+      if (existing) {
+        setIsReplacingReport(true);
+        setExistingReportToReplace(existing);
+      } else {
+        setIsReplacingReport(false);
+        setExistingReportToReplace(null);
+      }
+    }
+  };
+
+  const handleSelectAllTests = () => {
+    if (!targetBookingForUpload) return;
+    const all = targetBookingForUpload.tests.map((t) => t.name);
+    setSelectedTestNamesForReport(all);
+
+    const existing = reports.find((r) => r.bookingId === targetBookingForUpload.id && r.status === 'ready');
+    if (existing) {
+      setIsReplacingReport(true);
+      setExistingReportToReplace(existing);
+    } else {
+      setIsReplacingReport(false);
+      setExistingReportToReplace(null);
+    }
+  };
+
+  const handlePDFFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPdfUploadError('');
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+
+    // File type validation (must be PDF)
+    if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+      setPdfUploadError('Invalid document format. Only official PDF medical reports (.pdf) are permitted.');
+      setSelectedPDFFile(null);
+      setSelectedPDFDataUrl('');
+      return;
+    }
+
+    // Size validation (Max 15MB)
+    const maxSizeBytes = 15 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      setPdfUploadError('File size exceeds the 15 MB threshold. Please compress or optimize the PDF before uploading.');
+      setSelectedPDFFile(null);
+      setSelectedPDFDataUrl('');
+      return;
+    }
+
+    setSelectedPDFFile(file);
+
+    // Read file as Data URL for in-modal preview & private storage
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedPDFDataUrl(reader.result as string);
+    };
+    reader.onerror = () => {
+      setPdfUploadError('Failed to read the PDF file. Please try again or re-select the file.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendReportToPatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetBookingForUpload || !selectedPDFFile || !selectedPDFDataUrl) return;
+
+    if (selectedTestNamesForReport.length === 0) {
+      setPdfUploadError('Please select at least one test that this PDF report corresponds to.');
+      return;
+    }
+
+    if (!patientConfirmed) {
+      setPdfUploadError('Please confirm that this document matches the patient name and booking reference.');
+      return;
+    }
+
+    if (isReplacingReport && !replacementConfirmed) {
+      setPdfUploadError('Please confirm report replacement by checking the confirmation box.');
+      return;
+    }
+
+    setIsUploading(true);
+    setPdfUploadError('');
+
+    try {
+      const result = await uploadAndDeliverReport({
+        bookingId: targetBookingForUpload.id,
+        testNames: selectedTestNamesForReport,
+        file: selectedPDFFile,
+        fileDataUrl: selectedPDFDataUrl,
+        uploadedBy: currentUser?.fullName || 'Administrator (FCPS Pathologist)',
+        replaceExisting: isReplacingReport,
+        replacementReason: replacementReason || 'Updated report uploaded by Administrator',
+        existingReportIdToReplace: existingReportToReplace?.reportId,
+      });
+
+      if (result.success && result.reportId) {
+        setUploadSuccessAlert({
+          title: `Report ${result.reportId} Published & Delivered Successfully!`,
+          detail: `The PDF result is now ready in ${targetBookingForUpload.patientName}'s patient portal. An in-app notification was sent.`,
+        });
+        setTimeout(() => {
+          setIsUploadReportModalOpen(false);
+          setUploadSuccessAlert(null);
+        }, 2200);
+      } else {
+        setPdfUploadError(result.error || 'Failed to publish and deliver report.');
+      }
+    } catch (err: any) {
+      setPdfUploadError(err.message || 'An error occurred during report upload.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // ADMIN REPORT PREVIEW & DOWNLOAD HANDLER
+  // ----------------------------------------------------
+  const handleOpenAdminPreview = async (report: LabReportRecord) => {
+    setPreviewReportRecord(report);
+    if (previewRevokeFn) previewRevokeFn();
+    setPreviewBlobUrl(null);
+
+    if (report.hasPDF) {
+      const dataUrl = await getPrivateReportPDF(report.reportId);
+      if (dataUrl) {
+        const { blobUrl, revoke } = createAuthorizedBlobUrl(dataUrl);
+        setPreviewBlobUrl(blobUrl);
+        setPreviewRevokeFn(() => revoke);
+      }
+    }
+    setPreviewModalOpen(true);
+  };
+
+  const handleCloseAdminPreview = () => {
+    if (previewRevokeFn) previewRevokeFn();
+    setPreviewBlobUrl(null);
+    setPreviewRevokeFn(null);
+    setPreviewModalOpen(false);
+  };
+
+  // ----------------------------------------------------
+  // TEST CATALOG CRUD HANDLERS
+  // ----------------------------------------------------
   const handleOpenTestModal = (test?: LabTest) => {
     if (test) {
       setEditingTest(test);
@@ -186,15 +431,15 @@ export const AdminDashboard: React.FC = () => {
       gender: newBookingForm.gender,
       collectionType: newBookingForm.collectionType,
       tests: [
-        { code: 'AC-TEST', name: newBookingForm.testCodesInput || 'Diagnostic Screening', price: Number(newBookingForm.totalAmount) },
+        { code: 'AC-TEST', name: newBookingForm.testCodesInput || 'Diagnostic Screening', price: Number(newBookingForm.totalAmount), reportStatus: 'pending' },
       ],
       totalAmount: Number(newBookingForm.totalAmount),
     });
     setIsNewBookingModalOpen(false);
   };
 
-  // Report Creation Handler - Opens clean report editor
-  const handleOpenReportModal = (booking: BookingRecord) => {
+  // Manual Parameter Report Creation
+  const handleOpenManualReportModal = (booking: BookingRecord) => {
     setSelectedReportBooking(booking);
     const testNamesTitle = booking.tests.map((t) => t.name).join(' + ') || 'Diagnostic Testing Report';
 
@@ -207,78 +452,7 @@ export const AdminDashboard: React.FC = () => {
     setIsReportModalOpen(true);
   };
 
-  const handleAddParamRow = () => {
-    setReportForm((prev) => ({
-      ...prev,
-      parameters: [
-        ...prev.parameters,
-        { parameter: '', value: '', unit: '', referenceRange: '', status: 'Normal' },
-      ],
-    }));
-  };
-
-  const handleClearAllParams = () => {
-    setReportForm((prev) => ({
-      ...prev,
-      parameters: [{ parameter: '', value: '', unit: '', referenceRange: '', status: 'Normal' }],
-    }));
-  };
-
-  const handleRemoveParamRow = (index: number) => {
-    setReportForm((prev) => ({
-      ...prev,
-      parameters: prev.parameters.filter((_, idx) => idx !== index),
-    }));
-  };
-
-  const handleAddPresetParam = (presetName: string) => {
-    if (!presetName) return;
-    const preset = STANDARD_MEDICAL_PARAMETERS.find((p) => p.name === presetName);
-    if (!preset) return;
-    setReportForm((prev) => ({
-      ...prev,
-      parameters: [
-        ...prev.parameters,
-        {
-          parameter: preset.name,
-          value: preset.defaultValue,
-          unit: preset.unit,
-          referenceRange: preset.referenceRange,
-          status: 'Normal',
-        },
-      ],
-    }));
-  };
-
-  const handleUpdateParamRow = (index: number, field: keyof ReportParamRow, value: string) => {
-    setReportForm((prev) => {
-      const updated = [...prev.parameters];
-      updated[index] = { ...updated[index], [field]: value };
-
-      // Auto-fill unit & reference range when selecting/typing a matching standard medical test parameter
-      if (field === 'parameter') {
-        const match = STANDARD_MEDICAL_PARAMETERS.find(
-          (p) => p.name.toLowerCase() === value.trim().toLowerCase()
-        );
-        if (match) {
-          updated[index].parameter = match.name;
-          if (!updated[index].unit || updated[index].unit === 'Result') {
-            updated[index].unit = match.unit;
-          }
-          if (!updated[index].referenceRange || updated[index].referenceRange === 'Standard') {
-            updated[index].referenceRange = match.referenceRange;
-          }
-          if (!updated[index].value || updated[index].value === 'Satisfactory / Normal') {
-            updated[index].value = match.defaultValue;
-          }
-        }
-      }
-
-      return { ...prev, parameters: updated };
-    });
-  };
-
-  const handlePublishReport = (e: React.FormEvent) => {
+  const handlePublishManualReport = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReportBooking) return;
 
@@ -293,22 +467,104 @@ export const AdminDashboard: React.FC = () => {
       testsList: selectedReportBooking.tests,
       results: reportForm.parameters,
       pathologist: reportForm.pathologistName,
+      uploadedBy: currentUser?.fullName || 'Administrator',
+      publishedBy: currentUser?.fullName || 'Administrator',
     });
 
     updateBookingStatus(selectedReportBooking.id, reportForm.statusUpdate, 'Paid');
     setIsReportModalOpen(false);
-    alert(`Lab Report for ${selectedReportBooking.patientName} Published successfully! Available in Patient Portal.`);
+    alert(`Manual Lab Report for ${selectedReportBooking.patientName} published successfully!`);
   };
 
-  // Filtered Lists
+  // ----------------------------------------------------
+  // FILTERED DATASETS
+  // ----------------------------------------------------
+  const filteredBookingsList = bookings.filter((b) => {
+    // Status filter
+    if (bookingFilter === 'Awaiting Reports') {
+      if (b.status === 'Completed' || b.status === 'Cancelled') return false;
+      const hasPending = b.tests.some((t) => t.reportStatus !== 'ready');
+      if (!hasPending) return false;
+    } else if (bookingFilter !== 'All') {
+      if (b.status !== bookingFilter) return false;
+    }
+
+    // Search query
+    if (bookingSearch.trim()) {
+      const q = bookingSearch.toLowerCase();
+      const matchId = b.id.toLowerCase().includes(q);
+      const matchName = b.patientName.toLowerCase().includes(q);
+      const matchPhone = b.phoneNumber.toLowerCase().includes(q);
+      const matchTest = b.tests.some((t) => t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q));
+      if (!matchId && !matchName && !matchPhone && !matchTest) return false;
+    }
+
+    return true;
+  });
+
+  // Aggregated Patients Directory
+  const registeredAccounts = getAllRegisteredAccounts();
+  const allPatientsMap = new Map<string, { id: string; name: string; contact: string; bookingsCount: number; reportsCount: number }>();
+
+  registeredAccounts.forEach((acc) => {
+    allPatientsMap.set(acc.id, {
+      id: acc.id,
+      name: acc.fullName,
+      contact: acc.emailOrPhone,
+      bookingsCount: 0,
+      reportsCount: 0,
+    });
+  });
+
+  bookings.forEach((b) => {
+    const key = b.userId || b.phoneNumber;
+    if (allPatientsMap.has(key)) {
+      const p = allPatientsMap.get(key)!;
+      p.bookingsCount += 1;
+    } else {
+      allPatientsMap.set(key, {
+        id: b.userId || `walkin_${b.id}`,
+        name: b.patientName,
+        contact: b.phoneNumber,
+        bookingsCount: 1,
+        reportsCount: 0,
+      });
+    }
+  });
+
+  reports.forEach((r) => {
+    const key = r.userId || r.patientPhone || '';
+    if (allPatientsMap.has(key)) {
+      allPatientsMap.get(key)!.reportsCount += 1;
+    }
+  });
+
+  const allPatientsList = Array.from(allPatientsMap.values()).filter((p) => {
+    if (!patientSearch.trim()) return true;
+    const q = patientSearch.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.contact.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+  });
+
+  // Filtered Reports Archive
+  const filteredReportsList = reports.filter((r) => {
+    if (reportStatusFilter !== 'All' && r.status !== reportStatusFilter) return false;
+    if (reportSearch.trim()) {
+      const q = reportSearch.toLowerCase();
+      const matchId = r.reportId.toLowerCase().includes(q);
+      const matchBooking = r.bookingId.toLowerCase().includes(q);
+      const matchPatient = r.patientName.toLowerCase().includes(q);
+      const matchTest = r.testName.toLowerCase().includes(q);
+      if (!matchId && !matchBooking && !matchPatient && !matchTest) return false;
+    }
+    return true;
+  });
+
   const filteredTestsList = tests.filter(
     (t) =>
       t.name.toLowerCase().includes(testSearch.toLowerCase()) ||
       t.code.includes(testSearch) ||
       t.category.toLowerCase().includes(testSearch.toLowerCase())
   );
-
-  const filteredBookingsList = bookings.filter((b) => (bookingFilter === 'All' ? true : b.status === bookingFilter));
 
   return (
     <div className="app-container">
@@ -335,11 +591,11 @@ export const AdminDashboard: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                   <Shield size={26} color="var(--primary-blue)" />
                   <h1 style={{ fontSize: '1.5rem', color: 'var(--primary-blue)', margin: 0 }}>
-                    Aftab Clinic Admin Control Center
+                    Aftab Clinic Diagnostic Admin Center
                   </h1>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem', margin: 0 }}>
-                  Logged in as Administrator (Full privileges: Edit Tests, Manage Bookings, Print Receipts & Publish Reports)
+                  Logged in as Administrator (Upload & Deliver PDF Reports, Manage Bookings, Patients, and Test Catalog)
                 </p>
               </div>
 
@@ -357,7 +613,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Tab Bar */}
+            {/* Clean Admin Navigation Tab Bar */}
             <div
               style={{
                 display: 'flex',
@@ -383,7 +639,7 @@ export const AdminDashboard: React.FC = () => {
                   whiteSpace: 'nowrap',
                 }}
               >
-                📊 Dashboard Overview
+                📊 Overview
               </button>
 
               <button
@@ -399,9 +655,53 @@ export const AdminDashboard: React.FC = () => {
                   borderBottom: activeTab === 'bookings' ? '3px solid var(--primary-blue)' : '3px solid transparent',
                   marginBottom: '-0.5rem',
                   whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
                 }}
               >
                 📋 Bookings & Cash Receipts ({bookings.length})
+                {awaitingReportsCount > 0 && (
+                  <span style={{ backgroundColor: '#fef3c7', color: '#b45309', fontSize: '0.6875rem', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                    {awaitingReportsCount} awaiting
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('patients')}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  color: activeTab === 'patients' ? 'var(--primary-blue)' : 'var(--text-muted)',
+                  borderBottom: activeTab === 'patients' ? '3px solid var(--primary-blue)' : '3px solid transparent',
+                  marginBottom: '-0.5rem',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                👥 Patients Directory ({allPatientsList.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('reports')}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  color: activeTab === 'reports' ? 'var(--primary-blue)' : 'var(--text-muted)',
+                  borderBottom: activeTab === 'reports' ? '3px solid var(--primary-blue)' : '3px solid transparent',
+                  marginBottom: '-0.5rem',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                📄 Delivered Reports ({reports.length})
               </button>
 
               <button
@@ -448,20 +748,20 @@ export const AdminDashboard: React.FC = () => {
                   <div className="card" style={{ borderTop: '4px solid #f59e0b' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
                       <Clock size={22} color="#f59e0b" />
-                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Pending Samples</span>
+                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Awaiting Reports</span>
                     </div>
-                    <div style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-dark)' }}>
-                      {pendingCount}
+                    <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#b45309' }}>
+                      {awaitingReportsCount}
                     </div>
                   </div>
 
                   <div className="card" style={{ borderTop: '4px solid var(--primary-green)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
                       <CheckCircle size={22} color="var(--primary-green)" />
-                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Completed Reports</span>
+                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Delivered Reports</span>
                     </div>
                     <div style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-dark)' }}>
-                      {completedCount}
+                      {reports.length}
                     </div>
                   </div>
 
@@ -542,214 +842,345 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </form>
                 </div>
-
-                {/* Quick Recent Activity */}
-                <div className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{ fontSize: '1.125rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Calendar size={20} color="var(--primary-blue)" />
-                      Recent Patient Bookings
-                    </h3>
-                    <button onClick={() => setActiveTab('bookings')} className="btn btn-outline" style={{ fontSize: '0.75rem' }}>
-                      View All Bookings
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {bookings.slice(0, 5).map((b) => (
-                      <div
-                        key={b.id}
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.75rem',
-                          padding: '0.875rem 1rem',
-                          backgroundColor: 'var(--bg-slate)',
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid var(--border-light)',
-                        }}
-                      >
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--primary-blue)' }}>{b.patientName}</span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', backgroundColor: '#e2e8f0', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                              {b.id}
-                            </span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>• {b.phoneNumber}</span>
-                          </div>
-                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                            {b.tests.map((t) => t.name).join(', ')} • {b.date} ({b.collectionType})
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--primary-green)' }}>
-                            Rs. {b.totalAmount.toLocaleString()}
-                          </span>
-
-                          <button
-                            onClick={() => handlePrintReceipt(b)}
-                            className="btn btn-outline"
-                            style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', gap: '0.3rem' }}
-                          >
-                            <Printer size={14} /> Receipt
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
 
             {/* TAB 2: BOOKINGS & CASH RECEIPTS */}
             {activeTab === 'bookings' && (
               <div>
+                {/* Search & Quick Filter Bar */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                     <h2 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
-                      Patient Booking Records
+                      Patient Bookings
                     </h2>
-                    {/* Status Filter */}
-                    <select
-                      value={bookingFilter}
-                      onChange={(e) => setBookingFilter(e.target.value as any)}
-                      style={{
-                        padding: '0.375rem 0.75rem',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '0.8125rem',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <option value="All">All Statuses</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Completed">Completed</option>
-                    </select>
+
+                    {/* Filter Pills */}
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      {[
+                        { label: 'All', value: 'All', count: bookings.length },
+                        { label: '⚠️ Awaiting Reports', value: 'Awaiting Reports', count: awaitingReportsCount, highlight: true },
+                        { label: 'Pending', value: 'Pending', count: pendingCount },
+                        { label: 'In Process', value: 'In Process', count: inProcessCount },
+                        { label: 'Completed', value: 'Completed', count: completedCount },
+                      ].map((chip) => (
+                        <button
+                          key={chip.value}
+                          onClick={() => setBookingFilter(chip.value as any)}
+                          style={{
+                            padding: '0.3rem 0.65rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            borderRadius: 'var(--radius-full)',
+                            border: bookingFilter === chip.value ? '1px solid var(--primary-blue)' : '1px solid var(--border-light)',
+                            backgroundColor: bookingFilter === chip.value ? 'var(--primary-blue)' : chip.highlight && chip.count > 0 ? '#fef3c7' : '#ffffff',
+                            color: bookingFilter === chip.value ? '#ffffff' : chip.highlight && chip.count > 0 ? '#b45309' : 'var(--text-dark)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {chip.label} ({chip.count})
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <button onClick={() => setIsNewBookingModalOpen(true)} className="btn btn-primary" style={{ fontSize: '0.8125rem' }}>
-                    <Plus size={16} /> New Counter Booking
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div className="input-wrapper" style={{ minWidth: '220px' }}>
+                      <Search size={16} className="input-icon" />
+                      <input
+                        type="text"
+                        placeholder="Search patient, ref, phone..."
+                        value={bookingSearch}
+                        onChange={(e) => setBookingSearch(e.target.value)}
+                        style={{ padding: '0.4rem 0.75rem 0.4rem 2.25rem', fontSize: '0.8125rem' }}
+                      />
+                    </div>
+
+                    <button onClick={() => setIsNewBookingModalOpen(true)} className="btn btn-primary" style={{ fontSize: '0.8125rem' }}>
+                      <Plus size={16} /> New Booking
+                    </button>
+                  </div>
                 </div>
 
                 <div className="card" style={{ padding: '0.5rem' }}>
                   <div className="table-responsive">
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '850px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
                       <thead>
                         <tr style={{ borderBottom: '2px solid var(--border-light)', backgroundColor: 'var(--bg-slate)' }}>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Ref ID</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Patient Details & Age</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Date & Slot</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Tests Booked</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Tests & Report Status</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Total (PKR)</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Status</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Actions & Receipt</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredBookingsList.map((booking) => (
-                          <tr key={booking.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
-                              {booking.id}
+                        {filteredBookingsList.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                              No bookings found matching current filters.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBookingsList.map((booking) => (
+                            <tr key={booking.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
+                                {booking.id}
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{booking.patientName}</div>
+                                <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-blue)', marginTop: '0.15rem' }}>
+                                  Age: {booking.age ? `${booking.age}` : 'N/A'} ({booking.gender || 'Patient'})
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  📞 {booking.phoneNumber}
+                                </div>
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8125rem' }}>
+                                <div style={{ fontWeight: 600 }}>{booking.date}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--primary-blue)', fontWeight: 600, backgroundColor: 'var(--primary-blue-light)', padding: '0.15rem 0.4rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.25rem' }}>
+                                  ⏰ {booking.timeSlot || 'Morning (08:00 AM - 12:00 PM)'}
+                                </div>
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8125rem', maxWidth: '280px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  {booking.tests.map((t, idx) => {
+                                    const isReady = t.reportStatus === 'ready';
+                                    return (
+                                      <div
+                                        key={idx}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          gap: '0.35rem',
+                                          padding: '0.2rem 0.4rem',
+                                          backgroundColor: isReady ? '#f0fdf4' : '#fffbeb',
+                                          borderRadius: '4px',
+                                          border: isReady ? '1px solid #bbf7d0' : '1px solid #fef3c7',
+                                        }}
+                                      >
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dark)' }}>
+                                          [{t.code}] {t.name}
+                                        </span>
+                                        <span
+                                          style={{
+                                            fontSize: '0.6875rem',
+                                            fontWeight: 700,
+                                            padding: '0.1rem 0.35rem',
+                                            borderRadius: 'var(--radius-full)',
+                                            backgroundColor: isReady ? '#dcfce7' : '#fef3c7',
+                                            color: isReady ? '#15803d' : '#b45309',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {isReady ? '✓ Report Ready' : '⏳ Pending'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-green)' }}>
+                                Rs. {booking.totalAmount.toLocaleString()}
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                  ({booking.paymentStatus})
+                                </div>
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <select
+                                  value={booking.status}
+                                  onChange={(e) => updateBookingStatus(booking.id, e.target.value as any)}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    borderRadius: 'var(--radius-full)',
+                                    backgroundColor:
+                                      booking.status === 'Completed'
+                                        ? '#dcfce7'
+                                        : booking.status === 'Partially Ready'
+                                        ? '#ffedd5'
+                                        : booking.status === 'In Process'
+                                        ? '#e0e7ff'
+                                        : booking.status === 'Confirmed'
+                                        ? 'var(--primary-blue-light)'
+                                        : '#fef3c7',
+                                    color:
+                                      booking.status === 'Completed'
+                                        ? '#15803d'
+                                        : booking.status === 'Partially Ready'
+                                        ? '#c2410c'
+                                        : booking.status === 'In Process'
+                                        ? '#3730a3'
+                                        : booking.status === 'Confirmed'
+                                        ? 'var(--primary-blue)'
+                                        : '#b45309',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="Confirmed">Confirmed</option>
+                                  <option value="Sample Collected">Sample Collected</option>
+                                  <option value="In Process">In Process</option>
+                                  <option value="Partially Ready">Partially Ready</option>
+                                  <option value="Completed">Completed</option>
+                                  <option value="Cancelled">Cancelled</option>
+                                </select>
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                                  {/* UPLOAD REPORT ACTION */}
+                                  <button
+                                    onClick={() => handleOpenUploadReportModal(booking)}
+                                    className="btn btn-primary"
+                                    style={{
+                                      padding: '0.3rem 0.6rem',
+                                      fontSize: '0.75rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      backgroundColor: '#0284c7',
+                                    }}
+                                    title="Upload & Deliver PDF Report"
+                                  >
+                                    <Upload size={14} /> Upload Report
+                                  </button>
+
+                                  <button
+                                    onClick={() => handlePrintReceipt(booking)}
+                                    className="btn btn-outline"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                                    title="Print Official Cash Receipt"
+                                  >
+                                    <Printer size={14} /> Receipt
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleOpenManualReportModal(booking)}
+                                    className="btn btn-outline"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                                    title="Open Manual Parameter Editor"
+                                  >
+                                    <FileText size={14} /> Editor
+                                  </button>
+
+                                  <a
+                                    href={getWhatsAppUrl(
+                                      booking.phoneNumber,
+                                      `Hello ${booking.patientName}, regarding your Aftab Clinic Lab Booking (Ref: ${booking.id}) for ${booking.tests.map(t => t.name).join(', ')}. Status: ${booking.status}. Amount: Rs. ${booking.totalAmount}. Track report: ${window.location.origin}/reports`
+                                    )}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-whatsapp"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#fff', textDecoration: 'none' }}
+                                    title="Send WhatsApp Message"
+                                  >
+                                    <MessageCircle size={14} /> WhatsApp
+                                  </a>
+
+                                  <button
+                                    onClick={() => deleteBooking(booking.id)}
+                                    className="btn btn-outline"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'var(--error-red)', borderColor: '#fca5a5' }}
+                                    title="Delete Booking"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: PATIENTS DIRECTORY */}
+            {activeTab === 'patients' && (
+              <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div>
+                    <h2 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
+                      Patient Directory & Accounts
+                    </h2>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Verified patient accounts and associated clinical booking records
+                    </p>
+                  </div>
+
+                  <div className="input-wrapper" style={{ minWidth: '240px' }}>
+                    <Search size={16} className="input-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search patient name, phone, email..."
+                      value={patientSearch}
+                      onChange={(e) => setPatientSearch(e.target.value)}
+                      style={{ padding: '0.4rem 0.75rem 0.4rem 2.25rem', fontSize: '0.8125rem' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: '0.5rem' }}>
+                  <div className="table-responsive">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid var(--border-light)', backgroundColor: 'var(--bg-slate)' }}>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Patient Name</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Contact Identifier</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Patient ID</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Total Bookings</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Delivered Reports</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allPatientsList.map((patient) => (
+                          <tr key={patient.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                            <td style={{ padding: '0.75rem', fontWeight: 700, fontSize: '0.875rem' }}>
+                              {patient.name}
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-dark)' }}>
+                              {patient.contact}
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              <span style={{ backgroundColor: '#f1f5f9', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                                {patient.id}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+                              {patient.bookingsCount} Order(s)
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: patient.reportsCount > 0 ? 'var(--primary-green)' : 'var(--text-muted)' }}>
+                              {patient.reportsCount} Report(s)
                             </td>
                             <td style={{ padding: '0.75rem' }}>
-                              <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{booking.patientName}</div>
-                              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-blue)', marginTop: '0.15rem' }}>
-                                Age: {booking.age ? `${booking.age} Yrs` : 'N/A'} ({booking.gender || 'Patient'})
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                📞 {booking.phoneNumber}
-                              </div>
-                            </td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem' }}>
-                              <div style={{ fontWeight: 600 }}>{booking.date}</div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--primary-blue)', fontWeight: 600, backgroundColor: 'var(--primary-blue-light)', padding: '0.15rem 0.4rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.25rem' }}>
-                                ⏰ {booking.timeSlot || 'Morning (08:00 AM - 12:00 PM)'}
-                              </div>
-                            </td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.8125rem', maxWidth: '220px' }}>
-                              {booking.tests.map((t) => t.name).join(', ')}
-                            </td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-green)' }}>
-                              Rs. {booking.totalAmount.toLocaleString()}
-                            </td>
-                            <td style={{ padding: '0.75rem' }}>
-                              <select
-                                value={booking.status}
-                                onChange={(e) => updateBookingStatus(booking.id, e.target.value as any)}
-                                style={{
-                                  padding: '0.25rem 0.5rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 600,
-                                  borderRadius: 'var(--radius-full)',
-                                  backgroundColor:
-                                    booking.status === 'Completed'
-                                      ? 'var(--success-bg)'
-                                      : booking.status === 'Confirmed'
-                                      ? 'var(--primary-blue-light)'
-                                      : '#fef3c7',
-                                  color:
-                                    booking.status === 'Completed'
-                                      ? 'var(--success-green)'
-                                      : booking.status === 'Confirmed'
-                                      ? 'var(--primary-blue)'
-                                      : '#f59e0b',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <option value="Pending">Pending</option>
-                                <option value="Confirmed">Confirmed</option>
-                                <option value="Sample Collected">Sample Collected</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Cancelled">Cancelled</option>
-                              </select>
-                            </td>
-                            <td style={{ padding: '0.75rem' }}>
-                              <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 <button
-                                  onClick={() => handlePrintReceipt(booking)}
+                                  onClick={() => {
+                                    setBookingSearch(patient.name);
+                                    setActiveTab('bookings');
+                                  }}
                                   className="btn btn-outline"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                                  title="Print Official Cash Receipt"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                                 >
-                                  <Printer size={14} /> Receipt
+                                  View Bookings
                                 </button>
-
                                 <button
-                                  onClick={() => handleOpenReportModal(booking)}
-                                  className="btn btn-primary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                                  title="Publish Digital Lab Report"
-                                >
-                                  <FileText size={14} /> Report
-                                </button>
-
-                                <a
-                                  href={getWhatsAppUrl(
-                                    booking.phoneNumber,
-                                    `Hello ${booking.patientName}, regarding your Aftab Clinic Lab Booking (Ref: ${booking.id}) for ${booking.tests.map(t => t.name).join(', ')}. Status: ${booking.status}. Amount: Rs. ${booking.totalAmount}. Track report: ${window.location.origin}/reports`
-                                  )}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="btn btn-whatsapp"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#fff', textDecoration: 'none' }}
-                                  title="Send WhatsApp / WhatsApp Business Message to Patient"
-                                >
-                                  <MessageCircle size={14} /> WhatsApp
-                                </a>
-
-                                <button
-                                  onClick={() => deleteBooking(booking.id)}
+                                  onClick={() => {
+                                    setReportSearch(patient.name);
+                                    setActiveTab('reports');
+                                  }}
                                   className="btn btn-outline"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'var(--error-red)', borderColor: '#fca5a5' }}
-                                  title="Delete Booking"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                                 >
-                                  <Trash2 size={14} />
+                                  View Reports
                                 </button>
                               </div>
                             </td>
@@ -762,7 +1193,155 @@ export const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 3: TEST CATALOG CRUD */}
+            {/* TAB 4: DELIVERED REPORTS & AUDIT TRAIL */}
+            {activeTab === 'reports' && (
+              <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <h2 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
+                      Delivered Diagnostic Reports Archive
+                    </h2>
+
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      {(['All', 'ready', 'replaced'] as const).map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => setReportStatusFilter(st)}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            borderRadius: 'var(--radius-full)',
+                            border: reportStatusFilter === st ? '1px solid var(--primary-blue)' : '1px solid var(--border-light)',
+                            backgroundColor: reportStatusFilter === st ? 'var(--primary-blue)' : '#ffffff',
+                            color: reportStatusFilter === st ? '#ffffff' : 'var(--text-dark)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {st === 'All' ? 'All Reports' : st === 'ready' ? 'Active / Ready' : 'Replaced'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="input-wrapper" style={{ minWidth: '240px' }}>
+                    <Search size={16} className="input-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search report ID, booking ref, patient..."
+                      value={reportSearch}
+                      onChange={(e) => setReportSearch(e.target.value)}
+                      style={{ padding: '0.4rem 0.75rem 0.4rem 2.25rem', fontSize: '0.8125rem' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: '0.5rem' }}>
+                  <div className="table-responsive">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid var(--border-light)', backgroundColor: 'var(--bg-slate)' }}>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Report ID</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Booking Ref</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Patient Details</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Investigations Covered</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Audit Trail & Publication</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Status</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredReportsList.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
+                              No diagnostic reports delivered yet. Use "Upload Report" on a booking to deliver a PDF report.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredReportsList.map((rep) => (
+                            <tr key={rep.reportId} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
+                                {rep.reportId}
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+                                {rep.bookingId}
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{rep.patientName}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📞 {rep.patientPhone}</div>
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8125rem', maxWidth: '240px' }}>
+                                <div style={{ fontWeight: 600 }}>{rep.testName}</div>
+                                {rep.hasPDF && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--primary-blue)', marginTop: '0.2rem' }}>
+                                    📎 {rep.fileName || 'Report.pdf'} ({rep.fileSizeFormatted})
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <div><strong>Published By:</strong> {rep.publishedBy || rep.uploadedBy}</div>
+                                <div><strong>When:</strong> {new Date(rep.publishedAt || rep.date).toLocaleString()}</div>
+                                {rep.isReplacement && (
+                                  <div style={{ color: '#b45309', fontWeight: 600, marginTop: '0.2rem' }}>
+                                    Replaces: {rep.replacedReportId} ({rep.replacementReason})
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <span
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: 'var(--radius-full)',
+                                    backgroundColor: rep.status === 'ready' ? '#dcfce7' : '#fee2e2',
+                                    color: rep.status === 'ready' ? '#15803d' : '#b91c1c',
+                                  }}
+                                >
+                                  {rep.status === 'ready' ? '✅ Ready' : 'Replaced'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <button
+                                    onClick={() => handleOpenAdminPreview(rep)}
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                                    title="Preview Authenticated PDF"
+                                  >
+                                    <Eye size={13} /> Preview
+                                  </button>
+
+                                  {/* Replace Action directly on report */}
+                                  {(() => {
+                                    const associatedBooking = bookings.find((b) => b.id === rep.bookingId);
+                                    if (associatedBooking) {
+                                      return (
+                                        <button
+                                          onClick={() => handleOpenUploadReportModal(associatedBooking, rep.testNames?.[0])}
+                                          className="btn btn-outline"
+                                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                                          title="Replace with updated PDF"
+                                        >
+                                          <RefreshCw size={13} /> Replace
+                                        </button>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: TEST CATALOG CRUD */}
             {activeTab === 'tests' && (
               <div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -776,7 +1355,6 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Search Input */}
                     <div className="input-wrapper" style={{ minWidth: '220px' }}>
                       <Search size={16} className="input-icon" />
                       <input
@@ -858,6 +1436,464 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </main>
       </Layout>
+
+      {/* ==================================================== */}
+      {/* MODAL: UPLOAD & DELIVER PDF REPORT                   */}
+      {/* ==================================================== */}
+      {isUploadReportModalOpen && targetBookingForUpload && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              backgroundColor: '#ffffff',
+              padding: '1.75rem',
+              borderRadius: '24px',
+              boxShadow: '0 20px 45px -10px rgba(0, 56, 179, 0.2)',
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Upload size={22} color="var(--primary-blue)" />
+                  Upload & Deliver PDF Report
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
+                  Securely deliver official verified PDF test result to the patient's authenticated portal.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsUploadReportModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Success Alert Banner */}
+            {uploadSuccessAlert && (
+              <div
+                style={{
+                  backgroundColor: '#dcfce7',
+                  border: '1px solid #86efac',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  marginBottom: '1rem',
+                  color: '#166534',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{uploadSuccessAlert.title}</div>
+                <div style={{ fontSize: '0.8125rem', marginTop: '0.25rem' }}>{uploadSuccessAlert.detail}</div>
+              </div>
+            )}
+
+            {/* Error Banner */}
+            {pdfUploadError && (
+              <div
+                style={{
+                  backgroundColor: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1rem',
+                  color: '#991b1b',
+                  fontSize: '0.8125rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <AlertTriangle size={16} />
+                <span>{pdfUploadError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSendReportToPatient}>
+              {/* Step 1: Patient & Booking Context Card */}
+              <div
+                style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary-blue)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                  Patient & Booking Information
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', fontSize: '0.8125rem' }}>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Patient Name</span>
+                    <strong style={{ color: 'var(--primary-blue)' }}>{targetBookingForUpload.patientName}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Booking Reference</span>
+                    <strong style={{ backgroundColor: 'var(--primary-blue-light)', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>
+                      {targetBookingForUpload.id}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Phone Number</span>
+                    <strong>{targetBookingForUpload.phoneNumber}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Age / Gender</span>
+                    <strong>{targetBookingForUpload.age} / {targetBookingForUpload.gender}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Ordered Tests Selection (Multi-test support) */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-dark)', margin: 0 }}>
+                    Select Tests Covered by this PDF ({selectedTestNamesForReport.length}/{targetBookingForUpload.tests.length}):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllTests}
+                    style={{ background: 'none', border: 'none', color: 'var(--primary-blue)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Select All Tests
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {targetBookingForUpload.tests.map((test, idx) => {
+                    const isChecked = selectedTestNamesForReport.includes(test.name);
+                    const isAlreadyReady = test.reportStatus === 'ready';
+
+                    return (
+                      <label
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: 'var(--radius-md)',
+                          border: isChecked ? '1px solid var(--primary-blue)' : '1px solid var(--border-light)',
+                          backgroundColor: isChecked ? 'var(--primary-blue-light)' : '#ffffff',
+                          cursor: 'pointer',
+                          fontSize: '0.8125rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleTestSelectionChange(test.name)}
+                          />
+                          <span style={{ fontWeight: 600 }}>[{test.code}] {test.name}</span>
+                        </div>
+
+                        <div>
+                          {isAlreadyReady && (
+                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#b45309', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                              ⚠️ Report Delivered (Will Replace)
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.35rem' }}>
+                  *For bookings with multiple tests, delivering an individual report marks that test ready without closing the entire booking while other results are pending.
+                </span>
+              </div>
+
+              {/* Step 3: File Upload Input with Type & Size Validation */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-dark)', display: 'block', marginBottom: '0.35rem' }}>
+                  Select PDF Result File (.pdf only, max 15 MB)
+                </label>
+
+                <div
+                  style={{
+                    border: '2px dashed #cbd5e1',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '1.25rem',
+                    textAlign: 'center',
+                    backgroundColor: '#fafafa',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => document.getElementById('report-pdf-file-input')?.click()}
+                >
+                  <input
+                    id="report-pdf-file-input"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    style={{ display: 'none' }}
+                    onChange={handlePDFFileSelected}
+                  />
+
+                  {selectedPDFFile ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                      <FileText size={28} color="var(--primary-green)" />
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-dark)' }}>
+                          {selectedPDFFile.name}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Size: {Math.round(selectedPDFFile.size / 1024)} KB • Format: PDF Validated ✓
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <Upload size={32} color="var(--primary-blue)" style={{ margin: '0 auto 0.5rem auto', opacity: 0.8 }} />
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-dark)' }}>
+                        Click to browse or drag and drop signed PDF report
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        Only official PDF format is accepted. File size up to 15 MB.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step 4: In-Modal PDF Preview */}
+              {selectedPDFDataUrl && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Eye size={15} color="var(--primary-blue)" />
+                    Document Preview (Verify patient & tests before delivery)
+                  </div>
+                  <div style={{ height: '300px', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', overflow: 'hidden', backgroundColor: '#525659' }}>
+                    <iframe
+                      src={`${selectedPDFDataUrl}#toolbar=0`}
+                      title="Report PDF Preview"
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 5: Explicit Confirmations */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.875rem', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-dark)' }}>
+                  <input
+                    type="checkbox"
+                    checked={patientConfirmed}
+                    onChange={(e) => setPatientConfirmed(e.target.checked)}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    I confirm that this PDF report matches patient <strong>{targetBookingForUpload.patientName}</strong> for booking reference <strong>{targetBookingForUpload.id}</strong>.
+                  </span>
+                </label>
+              </div>
+
+              {/* Step 6: Replacement Handling (If replacing an existing report) */}
+              {isReplacingReport && (
+                <div
+                  style={{
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.875rem 1rem',
+                    marginBottom: '1.25rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#b45309', fontWeight: 700, fontSize: '0.8125rem', marginBottom: '0.35rem' }}>
+                    <AlertTriangle size={16} />
+                    <span>Report Replacement Notice:</span>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: '#92400e', margin: '0 0 0.5rem 0' }}>
+                    A report for this test is already delivered in the patient's account (ID: {existingReportToReplace?.reportId || 'Existing'}). Uploading this file will archive the previous report and deliver the revision to the patient.
+                  </p>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 700, color: '#92400e', marginBottom: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={replacementConfirmed}
+                      onChange={(e) => setReplacementConfirmed(e.target.checked)}
+                    />
+                    <span>I explicitly confirm replacing the previous report with this updated PDF.</span>
+                  </label>
+
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#92400e', display: 'block', marginBottom: '0.2rem' }}>
+                      Reason for Replacement:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Recalibrated test result / typo correction..."
+                      value={replacementReason}
+                      onChange={(e) => setReplacementReason(e.target.value)}
+                      style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid #fde68a' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 7: "Send to Patient" Action Button */}
+              <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
+                <button
+                  type="submit"
+                  disabled={!selectedPDFFile || !patientConfirmed || (isReplacingReport && !replacementConfirmed) || isUploading}
+                  className="btn btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    fontSize: '0.9375rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    opacity: !selectedPDFFile || !patientConfirmed || (isReplacingReport && !replacementConfirmed) || isUploading ? 0.6 : 1,
+                    cursor: !selectedPDFFile || !patientConfirmed || (isReplacingReport && !replacementConfirmed) || isUploading ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isUploading ? (
+                    <>
+                      <Clock size={18} style={{ animation: 'spin 1s infinite linear' }} />
+                      <span>Encrypting & Delivering to Patient Portal...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={18} />
+                      <span>Send to Patient</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Explicit Medical Delivery Notice */}
+                <div style={{ marginTop: '0.75rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  <Lock size={12} style={{ display: 'inline', marginRight: '4px' }} />
+                  <strong>Secure Delivery:</strong> "Send to Patient" delivers the report directly into the patient's authenticated portal. Diagnostic documents are stored privately and never sent over unencrypted WhatsApp or email.
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: ADMIN REPORT PREVIEW & AUDIT LOG VIEWER       */}
+      {/* ==================================================== */}
+      {previewModalOpen && previewReportRecord && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 1200,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '750px',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              backgroundColor: '#ffffff',
+              padding: '1.75rem',
+              borderRadius: '24px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.125rem', color: 'var(--primary-blue)', margin: 0 }}>
+                  Report Preview & Audit: {previewReportRecord.reportId}
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Patient: {previewReportRecord.patientName} • Booking: {previewReportRecord.bookingId}
+                </span>
+              </div>
+              <button onClick={handleCloseAdminPreview} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Audit Trail Details */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-slate)',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '0.5rem',
+                marginBottom: '1rem',
+              }}
+            >
+              <div><strong>Uploaded By:</strong> {previewReportRecord.uploadedBy}</div>
+              <div><strong>Uploaded At:</strong> {new Date(previewReportRecord.uploadedAt).toLocaleString()}</div>
+              <div><strong>Published By:</strong> {previewReportRecord.publishedBy}</div>
+              <div><strong>Published At:</strong> {new Date(previewReportRecord.publishedAt).toLocaleString()}</div>
+              {previewReportRecord.isReplacement && (
+                <div style={{ gridColumn: '1 / -1', color: '#b45309' }}>
+                  <strong>Replacement Note:</strong> Replaced report {previewReportRecord.replacedReportId} ({previewReportRecord.replacementReason})
+                </div>
+              )}
+            </div>
+
+            {/* PDF Viewer */}
+            {previewBlobUrl ? (
+              <div style={{ height: '480px', border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden', marginBottom: '1rem' }}>
+                <iframe
+                  src={`${previewBlobUrl}#toolbar=1`}
+                  title="PDF Preview"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                />
+              </div>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                Structured manual report parameter findings are recorded for this report.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button onClick={handleCloseAdminPreview} className="btn btn-outline">
+                Close Preview
+              </button>
+              {previewBlobUrl && (
+                <a
+                  href={previewBlobUrl}
+                  download={previewReportRecord.fileName || `${previewReportRecord.reportId}_Report.pdf`}
+                  className="btn btn-primary"
+                  style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <Download size={15} /> Download PDF
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: ADD / EDIT TEST */}
       {isTestModalOpen && (
@@ -1018,7 +2054,7 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Admin Discount Control Box (Percentage % - hidden during print) */}
+            {/* Admin Discount Control Box */}
             <div
               className="no-print"
               style={{
@@ -1167,7 +2203,6 @@ export const AdminDashboard: React.FC = () => {
               })()}
             </div>
 
-            {/* Modal Actions */}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button onClick={() => setIsReceiptModalOpen(false)} className="btn btn-outline">
                 Close
@@ -1278,7 +2313,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 4: PUBLISH DIGITAL LAB REPORT */}
+      {/* MODAL 4: MANUAL REPORT EDITOR */}
       {isReportModalOpen && selectedReportBooking && (
         <div
           style={{
@@ -1311,7 +2346,7 @@ export const AdminDashboard: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-blue)', margin: 0 }}>
-                  Publish Digital Report for {selectedReportBooking.patientName}
+                  Manual Report Editor: {selectedReportBooking.patientName}
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   Ref ID: {selectedReportBooking.id} • {selectedReportBooking.gender}, {selectedReportBooking.age}
@@ -1322,43 +2357,10 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handlePublishReport}>
-              {/* Customer Chosen Tests Highlights */}
-              <div
-                style={{
-                  backgroundColor: 'var(--primary-blue-light)',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '0.75rem 1rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary-blue)', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
-                  Customer Chosen Tests ({selectedReportBooking.tests.length}):
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                  {selectedReportBooking.tests.map((t, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        backgroundColor: '#ffffff',
-                        color: 'var(--primary-blue)',
-                        border: '1px solid var(--primary-blue)',
-                        padding: '0.15rem 0.5rem',
-                        borderRadius: 'var(--radius-full)',
-                      }}
-                    >
-                      🧪 {t.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
+            <form onSubmit={handlePublishManualReport}>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Title / Tests Included</label>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Title</label>
                   <input
                     type="text"
                     required
@@ -1369,170 +2371,16 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Report Status Update</label>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Status Update</label>
                   <select
                     style={{ width: '100%', boxSizing: 'border-box', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}
                     value={reportForm.statusUpdate}
                     onChange={(e) => setReportForm({ ...reportForm, statusUpdate: e.target.value as any })}
                   >
-                    <option value="Completed">Completed (Issue Signed Report)</option>
+                    <option value="Completed">Completed</option>
                     <option value="In Process">In Process</option>
-                    <option value="Sample Collected">Sample Collected</option>
-                    <option value="Action Required">Action Required / Issue</option>
                   </select>
                 </div>
-              </div>
-
-              {/* Dynamic Customer Test Parameter Findings List */}
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
-                  Test Parameter Findings ({reportForm.parameters.length})
-                </span>
-
-                <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
-                  <select
-                    onChange={(e) => {
-                      handleAddPresetParam(e.target.value);
-                      e.target.value = '';
-                    }}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.75rem',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border-light)',
-                      backgroundColor: '#fff',
-                      cursor: 'pointer',
-                      maxWidth: '210px',
-                    }}
-                  >
-                    <option value="">+ Quick Add Preset Test...</option>
-                    {STANDARD_MEDICAL_PARAMETERS.map((preset) => (
-                      <option key={preset.name} value={preset.name}>
-                        {preset.name} ({preset.unit})
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={handleAddParamRow}
-                    style={{
-                      background: 'var(--primary-blue-light)',
-                      color: 'var(--primary-blue)',
-                      border: 'none',
-                      padding: '0.25rem 0.6rem',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                    }}
-                  >
-                    <Plus size={14} /> Custom Row
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleClearAllParams}
-                    style={{
-                      background: '#fef2f2',
-                      color: 'var(--error-red)',
-                      border: '1px solid #fecaca',
-                      padding: '0.25rem 0.6rem',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                    title="Clear all rows to start empty"
-                  >
-                    Clear All
-                  </button>
-                </div>
-              </div>
-
-              {/* Datalist for autocomplete on initials */}
-              <datalist id="medical-parameters-datalist">
-                {STANDARD_MEDICAL_PARAMETERS.map((preset) => (
-                  <option key={preset.name} value={preset.name}>
-                    {preset.unit} (Ref: {preset.referenceRange})
-                  </option>
-                ))}
-              </datalist>
-
-              <div style={{ maxHeight: '340px', overflowY: 'auto', marginBottom: '1.25rem', paddingRight: '0.25rem' }}>
-                {reportForm.parameters.map((param, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      border: '1px solid var(--border-light)',
-                      padding: '0.75rem',
-                      borderRadius: '10px',
-                      marginBottom: '0.625rem',
-                      backgroundColor: 'var(--bg-slate)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.375rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.75rem', color: 'var(--primary-blue)' }}>
-                        Parameter #{idx + 1}
-                      </span>
-                      {reportForm.parameters.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveParamRow(idx)}
-                          style={{ background: 'none', border: 'none', color: 'var(--error-red)', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
-                        >
-                          <Trash2 size={13} /> Remove
-                        </button>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr 1.2fr', gap: '0.5rem' }}>
-                      <div>
-                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
-                          Name (Type initials e.g. Hb, TLC, ALT)
-                        </label>
-                        <input
-                          type="text"
-                          list="medical-parameters-datalist"
-                          placeholder="Type initials (e.g. Hb, TLC, ALT)..."
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
-                          value={param.parameter}
-                          onChange={(e) => handleUpdateParamRow(idx, 'parameter', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Value</label>
-                        <input
-                          type="text"
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
-                          value={param.value}
-                          onChange={(e) => handleUpdateParamRow(idx, 'value', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Unit</label>
-                        <input
-                          type="text"
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
-                          value={param.unit}
-                          onChange={(e) => handleUpdateParamRow(idx, 'unit', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>Ref Range</label>
-                        <input
-                          type="text"
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.8125rem', padding: '0.4rem 0.5rem', minWidth: 0 }}
-                          value={param.referenceRange}
-                          onChange={(e) => handleUpdateParamRow(idx, 'referenceRange', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
@@ -1540,7 +2388,7 @@ export const AdminDashboard: React.FC = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" style={{ padding: '0.6rem 1.25rem' }}>
-                  <FileText size={16} /> Publish & Issue Lab Report
+                  <FileText size={16} /> Publish Report
                 </button>
               </div>
             </form>
