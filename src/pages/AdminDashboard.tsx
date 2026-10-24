@@ -1319,6 +1319,19 @@ export const AdminDashboard: React.FC = () => {
                                 >
                                   View Reports
                                 </button>
+                                {!adminsList.some((a) => a.identifier === patient.contact || a.email.includes(patient.contact)) && (
+                                  <button
+                                    onClick={() => {
+                                      setNewAdminInput(patient.contact);
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className="btn btn-outline"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderColor: 'var(--primary-blue)', color: 'var(--primary-blue)' }}
+                                    title="Make this patient an Administrator"
+                                  >
+                                    + Make Admin
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
