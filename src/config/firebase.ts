@@ -16,7 +16,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 const rawProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
 
-// Strict configuration status
+// Strict live cloud connection check
 export const isLiveFirebaseConfigured = (): boolean => {
   return Boolean(
     rawApiKey &&
@@ -26,27 +26,29 @@ export const isLiveFirebaseConfigured = (): boolean => {
   );
 };
 
-// Explicit demo mode allowed only in development or if explicitly enabled
+// Demo mode is PERMANENTLY DISABLED in production.
+// Only accessible in local development when VITE_ENABLE_DEMO_MODE=true is explicitly set.
 export const isDemoModeActive = (): boolean => {
   if (import.meta.env.PROD) {
-    return false; // Production must NEVER silently fall back to demo mode
+    return false;
   }
-  return import.meta.env.VITE_ENABLE_DEMO_MODE === 'true' || !isLiveFirebaseConfigured();
+  return import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_MODE === 'true';
 };
 
-// Production configuration error check
+// Production fail-fast check: if in production without valid Firebase keys, block and display configuration prompt
 export const isProductionMisconfigured = (): boolean => {
   return import.meta.env.PROD && !isLiveFirebaseConfigured();
 };
 
 // Firebase Project Configuration
+// Project ID: aftab-clinic-4dfe0
 const firebaseConfig = {
-  apiKey: rawApiKey || "AIzaSyAFTABCLINIC_DEMO_KEY_2026",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "aftab-clinic.firebaseapp.com",
-  projectId: rawProjectId || "aftab-clinic",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "aftab-clinic.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "789012345678",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:789012345678:web:abcdef123456789",
+  apiKey: rawApiKey || (import.meta.env.DEV ? "AIzaSyAFTABCLINIC_DEV_KEY_2026" : ""),
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "aftab-clinic-4dfe0.firebaseapp.com",
+  projectId: rawProjectId || "aftab-clinic-4dfe0",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "aftab-clinic-4dfe0.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
 };
 
 // Initialize Firebase App instance
