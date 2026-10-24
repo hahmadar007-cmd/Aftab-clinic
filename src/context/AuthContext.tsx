@@ -13,6 +13,7 @@ import { purgeAllReportDataOnLogout } from '../utils/reportSecurity';
 
 export interface AuthResult {
   success: boolean;
+  isAdmin?: boolean;
   error?: string;
 }
 
